@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fixture Test — Instagram Research</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;800&display=swap" rel="stylesheet">
+<style>
+  :root { --bg:#0A0A08; --gold:#D4A843; --card:#141310; --line:#26231c; --txt:#EAE6DC; --dim:#9a937f; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { background:var(--bg); color:var(--txt); font-family:'Inter',system-ui,sans-serif; line-height:1.55; }
+  .wrap { max-width:1100px; margin:0 auto; padding:48px 24px 80px; }
+  .hero { border-bottom:1px solid var(--line); padding-bottom:32px; margin-bottom:32px; }
+  .hero .kicker { color:var(--gold); font-weight:600; letter-spacing:.14em; text-transform:uppercase; font-size:12px; }
+  .hero h1 { font-size:clamp(28px,5vw,44px); font-weight:800; margin:8px 0 10px; }
+  .hero .sub { color:var(--dim); max-width:720px; }
+  .hero .terms { margin-top:14px; display:flex; flex-wrap:wrap; gap:8px; }
+  .hero .terms span { border:1px solid var(--line); color:var(--gold); border-radius:999px; padding:3px 12px; font-size:12px; }
+  .stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:12px; margin-bottom:40px; }
+  .stat { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:16px 18px; }
+  .stat b { display:block; font-size:26px; color:var(--gold); font-weight:800; }
+  .stat span { color:var(--dim); font-size:12px; text-transform:uppercase; letter-spacing:.08em; }
+  h2 { font-size:22px; font-weight:800; margin:40px 0 18px; }
+  h2 em { color:var(--gold); font-style:normal; }
+  .cards { display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,1fr)); gap:18px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:16px; padding:18px; transition:transform .15s, border-color .15s; display:flex; flex-direction:column; gap:12px; }
+  .card:hover { transform:translateY(-3px); border-color:var(--gold); }
+  .card-head { display:flex; align-items:center; gap:12px; }
+  .rank { color:var(--gold); font-weight:800; font-size:22px; min-width:38px; }
+  .author { font-weight:600; }
+  .meta { color:var(--dim); font-size:12px; }
+  .eng { margin-left:auto; display:flex; gap:10px; color:var(--dim); font-size:13px; white-space:nowrap; }
+  .shots { display:flex; gap:6px; overflow-x:auto; }
+  .shots img { width:32%; min-width:90px; border-radius:8px; border:1px solid var(--line); }
+  .label { display:block; color:var(--gold); font-size:11px; text-transform:uppercase; letter-spacing:.1em; margin-bottom:2px; }
+  .row { font-size:14px; }
+  .hook { font-weight:600; font-size:15px; }
+  details summary { cursor:pointer; color:var(--dim); font-size:13px; }
+  .transcript { max-height:180px; overflow-y:auto; color:var(--dim); font-size:13px; margin-top:8px; padding:10px; background:var(--bg); border-radius:8px; border:1px solid var(--line); }
+  .why ul { margin:4px 0 0 18px; font-size:13px; color:var(--txt); }
+  .why li { margin-bottom:3px; }
+  .caption { color:var(--dim); font-size:13px; border-left:2px solid var(--line); padding-left:10px; }
+  .link { color:var(--gold); font-size:13px; text-decoration:none; margin-top:auto; }
+  .patterns { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:14px; }
+  .pattern { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:18px; }
+  .pattern h3 { color:var(--gold); font-size:14px; margin-bottom:8px; }
+  .pattern p { font-size:14px; color:var(--txt); }
+  footer { margin-top:60px; border-top:1px solid var(--line); padding-top:20px; color:var(--dim); font-size:13px; }
+  footer a { color:var(--gold); text-decoration:none; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="hero">
+    <div class="kicker">Instagram Niche Research</div>
+    <h1>Fixture Test</h1>
+    <div class="sub">test niche · scraped 2026-07-12</div>
+    <div class="terms"><span>#buildinpublic</span>
+      </div>
+  </div>
+
+  <div class="stats">
+    <div class="stat"><b>10</b><span>posts analyzed</span></div>
+    <div class="stat"><b>70%</b><span>reels</span></div>
+    <div class="stat"><b>2</b><span>transcribed</span></div>
+    <div class="stat"><b>0</b><span>visual hooks</span></div>
+    <div class="stat"><b>12.4K</b><span>top likes</span></div>
+  </div>
+
+  <h2>Top <em>6</em> performers</h2>
+  <div class="cards">
+
+  <div class="card">
+    <div class="card-head">
+      <span class="rank">#1</span>
+      <div>
+        <div class="author">@founder_one</div>
+        <div class="meta">reel · 2026-07-01 · top:buildinpublic</div>
+      </div>
+      <div class="eng">
+        <span>▶ 980K</span>
+        <span>♥ 12.4K</span>
+        <span>💬 312</span>
+      </div>
+    </div>
+    
+    <div class="row"><span class="label">Visual hook</span> Talking head with text overlay</div>
+    <div class="row hook"><span class="label">Spoken hook</span> “I shipped a bug today that deleted three weeks of user data.”</div>
+    <details><summary>Full transcript (31 words)</summary><div class="transcript">I shipped a bug today that deleted three weeks of user data. And honestly it was the best thing that happened to the product. Here is why backups saved my company.</div></details>
+    <div class="why"><span class="label">Why it worked</span><ul><li>Comment-bait CTA — drives comments, which the algorithm rewards hardest</li><li>Top-quartile engagement for this scrape — the niche demonstrably wants this</li></ul></div>
+    <div class="caption">Comment 'MODEL' and I'll send you the exact stack. Day 90 of building my AI startup.</div>
+    <a class="link" href="https://www.instagram.com/reel/AAA111/" target="_blank">Open post ↗</a>
+  </div>
+
+  <div class="card">
+    <div class="card-head">
+      <span class="rank">#2</span>
+      <div>
+        <div class="author">@founder_two</div>
+        <div class="meta">reel · 2026-06-28 · top:buildinpublic</div>
+      </div>
+      <div class="eng">
+        <span>▶ 540K</span>
+        <span>♥ 8.1K</span>
+        <span>💬 198</span>
+      </div>
+    </div>
+    
+    <div class="row"><span class="label">Visual hook</span> Talking head with text overlay</div>
+    <div class="row hook"><span class="label">Spoken hook</span> “Nobody tells you how hard month three actually is.”</div>
+    <details><summary>Full transcript (21 words)</summary><div class="transcript">Nobody tells you how hard month three actually is. The launch buzz is gone and you are alone with the bugs.</div></details>
+    <div class="why"><span class="label">Why it worked</span><ul><li>Named framework/system — packages the value, feels ownable and saveable</li><li>Short, punchy hook — lands within the first second of reading</li><li>Time promise — a concrete payoff deadline</li><li>Top-quartile engagement for this scrape — the niche demonstrably wants this</li></ul></div>
+    <div class="caption">The framework that got me to 10k MRR in 6 months.</div>
+    <a class="link" href="https://www.instagram.com/reel/BBB222/" target="_blank">Open post ↗</a>
+  </div>
+
+  <div class="card">
+    <div class="card-head">
+      <span class="rank">#3</span>
+      <div>
+        <div class="author">@ai_builder</div>
+        <div class="meta">reel · 2026-06-20 · top:buildinpublic</div>
+      </div>
+      <div class="eng">
+        <span>▶ 410K</span>
+        <span>♥ 6.9K</span>
+        <span>💬 150</span>
+      </div>
+    </div>
+    
+    <div class="row"><span class="label">Visual hook</span> Talking head with text overlay</div>
+    <div class="row hook"><span class="label">Spoken hook</span> “My AI just crossed 5,000 users and I still code from my kitchen.”</div>
+    
+    <div class="why"><span class="label">Why it worked</span><ul><li>Specific number in the hook — concrete beats vague, triggers specificity bias</li><li>Time promise — a concrete payoff deadline</li><li>Top-quartile engagement for this scrape — the niche demonstrably wants this</li></ul></div>
+    <div class="caption">From 0 to 5,000 users in 60 days, build in public works</div>
+    <a class="link" href="https://www.instagram.com/reel/CCC333/" target="_blank">Open post ↗</a>
+  </div>
+
+  <div class="card">
+    <div class="card-head">
+      <span class="rank">#4</span>
+      <div>
+        <div class="author">@dev_sam</div>
+        <div class="meta">reel · 2026-06-10 · top:buildinpublic</div>
+      </div>
+      <div class="eng">
+        <span>▶ 220K</span>
+        <span>♥ 4.4K</span>
+        <span>💬 77</span>
+      </div>
+    </div>
+    
+    <div class="row"><span class="label">Visual hook</span> Talking head with text overlay</div>
+    <div class="row hook"><span class="label">Spoken hook</span> “I found the one stat that quietly predicts churn.”</div>
+    
+    <div class="why"><span class="label">Why it worked</span><ul><li>Short, punchy hook — lands within the first second of reading</li></ul></div>
+    <div class="caption">The one metric I check every morning before coffee.</div>
+    <a class="link" href="https://www.instagram.com/reel/EEE555/" target="_blank">Open post ↗</a>
+  </div>
+
+  <div class="card">
+    <div class="card-head">
+      <span class="rank">#5</span>
+      <div>
+        <div class="author">@maker_mo</div>
+        <div class="meta">reel · 2026-07-05 · recent:buildinpublic</div>
+      </div>
+      <div class="eng">
+        <span>▶ 98K</span>
+        <span>♥ 2.1K</span>
+        <span>💬 40</span>
+      </div>
+    </div>
+    
+    <div class="row"><span class="label">Visual hook</span> Talking head with text overlay</div>
+    <div class="row hook"><span class="label">Spoken hook</span> “I was wrong about serverless and it cost me two hundred dollars.”</div>
+    
+    
+    <div class="caption">Why I rebuilt everything in a weekend.</div>
+    <a class="link" href="https://www.instagram.com/reel/FFF666/" target="_blank">Open post ↗</a>
+  </div>
+
+  <div class="card">
+    <div class="card-head">
+      <span class="rank">#6</span>
+      <div>
+        <div class="author">@indie_jane</div>
+        <div class="meta">image · 2026-06-15 · top:buildinpublic</div>
+      </div>
+      <div class="eng">
+        
+        <span>♥ 5.2K</span>
+        <span>💬 89</span>
+      </div>
+    </div>
+    
+    <div class="row"><span class="label">Visual hook</span> Static graphic / carousel slide</div>
+    <div class="row hook"><span class="label">Slide hook</span> “If this launch flops I'm out of runway in August.”</div>
+    
+    <div class="why"><span class="label">Why it worked</span><ul><li>Short, punchy hook — lands within the first second of reading</li></ul></div>
+    <div class="caption">A long caption about the journey of building products alone and what it taught me about focus.</div>
+    <a class="link" href="https://www.instagram.com/p/DDD444/" target="_blank">Open post ↗</a>
+  </div>
+  </div>
+
+  <h2>Winning <em>patterns</em></h2>
+  <div class="patterns">
+
+  <div class="pattern">
+    <h3>Format breakdown</h3>
+    <p>7 Reels vs 3 static posts scraped — 70% of what performs in this niche is video. Reels are the dominant format here; prioritize video.</p>
+  </div>
+
+  <div class="pattern">
+    <h3>Comment CTA usage</h3>
+    <p>1 of 10 posts use a &quot;comment X and I'll send it&quot; style CTA. Not dominant here, but the posts that use it tend to over-perform.</p>
+  </div>
+
+  <div class="pattern">
+    <h3>Hook analysis</h3>
+    <p>Of the top 6: 3 open with a hook under 60 characters, 1 put a specific number in the first line. The winning openers state a concrete outcome, problem, or contrarian claim — none open with a greeting or context-setting.</p>
+  </div>
+
+  <div class="pattern">
+    <h3>Content themes</h3>
+    <p>Recurring vocabulary across top performers: three, building, users. These are the concepts the niche audience is actively rewarding right now.</p>
+  </div>
+  </div>
+
+  <footer>
+    Research flow by <a href="https://www.instagram.com/leifabel11/" target="_blank">Leif Abel (@leifabel11)</a>
+    · adapted for the Epifani Growth Engine
+  </footer>
+</div>
+</body>
+</html>

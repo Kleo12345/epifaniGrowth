@@ -1,0 +1,15 @@
+{
+  "name": "epifani-ig-research",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Instagram niche research tool - scrape, transcribe, analyze top-performing content, and build the hook swipe file for the Epifani script engine",
+  "scripts": {
+    "scrape": "node scripts/scrape.js",
+    "transcribe": "python3 scripts/transcribe.py",
+    "report": "node scripts/report-html.js",
+    "swipe": "python3 scripts/build_swipe_file.py"
+  },
+  "dependencies": {
+    "chrome-remote-interface": "^0.33.0"
+  }
+}

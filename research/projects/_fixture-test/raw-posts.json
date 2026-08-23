@@ -1,0 +1,22 @@
+{
+  "project": "Fixture Test",
+  "niche": "test niche",
+  "scrapedAt": "2026-07-12T12:00:00.000Z",
+  "searchTerms": ["buildinpublic"],
+  "competitors": [],
+  "totalPosts": 10,
+  "reels": 7,
+  "images": 3,
+  "posts": [
+    {"postId": "AAA111", "type": "reel", "author": "founder_one", "likes": "12.4K", "views": "980K", "commentsCount": "312", "engagement": 980312, "caption": "Comment 'MODEL' and I'll send you the exact stack. Day 90 of building my AI startup.", "fullCaption": "Comment 'MODEL' and I'll send you the exact stack. Day 90 of building my AI startup.", "hook": "I shipped a bug today that deleted three weeks of user data.", "style": "CONFESSION", "url": "https://www.instagram.com/reel/AAA111/", "href": "/reel/AAA111/", "source": "top:buildinpublic", "date": "2026-07-01"},
+    {"postId": "BBB222", "type": "reel", "author": "founder_two", "likes": "8.1K", "views": "540K", "commentsCount": "198", "engagement": 540198, "caption": "The framework that got me to 10k MRR in 6 months.", "hook": "Nobody tells you how hard month three actually is.", "style": "STRUGGLE", "url": "https://www.instagram.com/reel/BBB222/", "href": "/reel/BBB222/", "source": "top:buildinpublic", "date": "2026-06-28"},
+    {"postId": "CCC333", "type": "reel", "author": "ai_builder", "likes": "6.9K", "views": "410K", "commentsCount": "150", "engagement": 410150, "caption": "From 0 to 5,000 users in 60 days, build in public works", "hook": "My AI just crossed 5,000 users and I still code from my kitchen.", "style": "RESULT/FLEX", "url": "https://www.instagram.com/reel/CCC333/", "href": "/reel/CCC333/", "source": "top:buildinpublic", "date": "2026-06-20"},
+    {"postId": "DDD444", "type": "image", "author": "indie_jane", "likes": "5.2K", "commentsCount": "89", "engagement": 5289, "caption": "A long caption about the journey of building products alone and what it taught me about focus.", "hook": "If this launch flops I'm out of runway in August.", "slideHook": true, "style": "STAKES", "url": "https://www.instagram.com/p/DDD444/", "href": "/p/DDD444/", "source": "top:buildinpublic", "date": "2026-06-15"},
+    {"postId": "EEE555", "type": "reel", "author": "dev_sam", "likes": "4.4K", "views": "220K", "commentsCount": "77", "engagement": 220077, "caption": "The one metric I check every morning before coffee.", "hook": "I found the one stat that quietly predicts churn.", "style": "CURIOSITY GAP", "url": "https://www.instagram.com/reel/EEE555/", "href": "/reel/EEE555/", "source": "top:buildinpublic", "date": "2026-06-10"},
+    {"postId": "FFF666", "type": "reel", "author": "maker_mo", "likes": "2.1K", "views": "98K", "commentsCount": "40", "engagement": 98040, "caption": "Why I rebuilt everything in a weekend.", "hook": "I was wrong about serverless and it cost me two hundred dollars.", "url": "https://www.instagram.com/reel/FFF666/", "href": "/reel/FFF666/", "source": "recent:buildinpublic", "date": "2026-07-05"},
+    {"postId": "GGG777", "type": "image", "author": "quiet_dev", "likes": "310", "commentsCount": "12", "engagement": 322, "caption": "Hello everyone, today I want to share a little update about my project and how things are going so far.", "url": "https://www.instagram.com/p/GGG777/", "href": "/p/GGG777/", "source": "recent:buildinpublic", "date": "2026-07-08"},
+    {"postId": "HHH888", "type": "reel", "author": "startup_guy", "likes": "150", "views": "4K", "commentsCount": "6", "engagement": 4006, "caption": "Check out my new app, link in bio! It's really cool and useful.", "url": "https://www.instagram.com/reel/HHH888/", "href": "/reel/HHH888/", "source": "recent:buildinpublic", "date": "2026-07-09"},
+    {"postId": "III999", "type": "image", "author": "biz_influencer", "likes": "95", "commentsCount": "3", "engagement": 98, "caption": "Motivation Monday! Keep grinding and never give up on your dreams.", "url": "https://www.instagram.com/p/III999/", "href": "/p/III999/", "source": "recent:buildinpublic", "date": "2026-07-10"},
+    {"postId": "JJJ000", "type": "reel", "author": "new_founder", "likes": "60", "views": "900", "commentsCount": "2", "engagement": 902, "caption": "Day 1 of my startup journey, follow along for more updates.", "url": "https://www.instagram.com/reel/JJJ000/", "href": "/reel/JJJ000/", "source": "recent:buildinpublic", "date": "2026-07-11"}
+  ]
+}

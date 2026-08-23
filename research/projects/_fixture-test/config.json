@@ -1,0 +1,8 @@
+{
+  "name": "Fixture Test",
+  "niche": "test niche",
+  "searchTerms": ["buildinpublic"],
+  "competitors": [],
+  "browserPort": 9222,
+  "maxPostsPerSearch": 9
+}

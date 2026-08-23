@@ -1,0 +1,208 @@
+{
+  "generated": "2026-07-13T00:30:34+00:00",
+  "projects": [
+    "build-in-public"
+  ],
+  "hooks": [
+    {
+      "hook": "Elon Musk Officially Hits $1.1 Trillion Net Worth, Becoming the World's First Trillionaire",
+      "style": "RESULT/FLEX",
+      "engagement": 263200,
+      "type": "reel",
+      "author": "10xaiengineer",
+      "source": "build-in-public/top:aistartup"
+    },
+    {
+      "hook": "POV: you make a macbook app that connects to your google cal so that a little airplane flies through your screen 5 minutes before all of your meetings",
+      "style": "RESULT/FLEX",
+      "engagement": 90764,
+      "type": "reel",
+      "author": "conniecodes",
+      "source": "build-in-public/competitor:@conniecodes"
+    },
+    {
+      "hook": "Backpack of a performative software engineer",
+      "style": "ANY",
+      "engagement": 88415,
+      "type": "reel",
+      "author": "conniecodes",
+      "source": "build-in-public/competitor:@conniecodes"
+    },
+    {
+      "hook": "Life is Hard. Make it Harder. Start your own company.",
+      "style": "CURIOSITY GAP",
+      "engagement": 86194,
+      "type": "reel",
+      "author": "adam.badar",
+      "source": "build-in-public/top:buildinpublic"
+    },
+    {
+      "hook": "I just forced ChatGPT to run a forensic audit on itself, and what it found was actually kind of terrifying.",
+      "style": "CURIOSITY GAP",
+      "engagement": 72000,
+      "type": "reel",
+      "author": "liambuilds.ai",
+      "source": "build-in-public/competitor:@liambuilds.ai"
+    },
+    {
+      "hook": "I pay for the highest tier GPT at 120 dollars a month because I need reliability and the best reasoning.",
+      "style": "CURIOSITY GAP",
+      "engagement": 56027,
+      "type": "reel",
+      "author": "liambuilds.ai",
+      "source": "build-in-public/competitor:@liambuilds.ai"
+    },
+    {
+      "hook": "If you don't wake up excited and go to bed tired...",
+      "style": "STAKES",
+      "engagement": 29984,
+      "type": "image",
+      "author": "thedankoe",
+      "source": "build-in-public/competitor:@thedankoe"
+    },
+    {
+      "hook": "Just keep building.",
+      "style": "ANY",
+      "engagement": 29241,
+      "type": "reel",
+      "author": "liambuilds.ai",
+      "source": "build-in-public/top:buildinpublic"
+    },
+    {
+      "hook": "Let's see if you actually know about startups.",
+      "style": "CURIOSITY GAP",
+      "engagement": 28097,
+      "type": "reel",
+      "author": "jackorrofficial",
+      "source": "build-in-public/top:buildinpublic"
+    },
+    {
+      "hook": "If you don't create a routine, you will be assigned one. If you don't find a purpose, you will be assigned one.",
+      "style": "STAKES",
+      "engagement": 19192,
+      "type": "image",
+      "author": "thedankoe",
+      "source": "build-in-public/competitor:@thedankoe"
+    },
+    {
+      "hook": "If you want a rare life, you have to be delusional.",
+      "style": "CURIOSITY GAP",
+      "engagement": 19103,
+      "type": "image",
+      "author": "thedankoe",
+      "source": "build-in-public/competitor:@thedankoe"
+    },
+    {
+      "hook": "I'm going to create an API with two different endpoints, it's going to take under a minute, and I'm going to show you exactly how.",
+      "style": "RESULT/FLEX",
+      "engagement": 13998,
+      "type": "reel",
+      "author": "conniecodes",
+      "source": "build-in-public/competitor:@conniecodes"
+    },
+    {
+      "hook": "Bag of a performative girly pop software engineer",
+      "style": "ANY",
+      "engagement": 11627,
+      "type": "reel",
+      "author": "conniecodes",
+      "source": "build-in-public/competitor:@conniecodes"
+    },
+    {
+      "hook": "The two to four hours you spend scrolling each day — 1,460 hours each year — is more than enough time to write a book, build a business, or get in shape.",
+      "style": "STAKES",
+      "engagement": 11284,
+      "type": "reel",
+      "author": "thedankoe",
+      "source": "build-in-public/competitor:@thedankoe"
+    },
+    {
+      "hook": "The fastest way to change your life is to rip yourself out of your physical and digital environment.",
+      "style": "CURIOSITY GAP",
+      "engagement": 10974,
+      "type": "reel",
+      "author": "thedankoe",
+      "source": "build-in-public/competitor:@thedankoe"
+    },
+    {
+      "hook": "Paying ChatGPT 20 dollars a month is bad. Paying the OpenAI API for only the tokens you use is good. Running DeepSeek locally on your own computer is excellent.",
+      "style": "CURIOSITY GAP",
+      "engagement": 10851,
+      "type": "reel",
+      "author": "liambuilds.ai",
+      "source": "build-in-public/competitor:@liambuilds.ai"
+    },
+    {
+      "hook": "Two books I'm reading as a senior software engineer — and you should too.",
+      "style": "ANY",
+      "engagement": 9840,
+      "type": "reel",
+      "author": "conniecodes",
+      "source": "build-in-public/competitor:@conniecodes"
+    },
+    {
+      "hook": "Skills that have nothing to do with money but are worth dedicating an immense amount of practice to: charisma, metacognition, critical thinking, sitting with discomfort.",
+      "style": "CURIOSITY GAP",
+      "engagement": 7473,
+      "type": "image",
+      "author": "thedankoe",
+      "source": "build-in-public/competitor:@thedankoe"
+    },
+    {
+      "hook": "Backpack of a Performative Startup Founder",
+      "style": "ANY",
+      "engagement": 6926,
+      "type": "reel",
+      "author": "adam.badar",
+      "source": "build-in-public/competitor:@adam.badar"
+    },
+    {
+      "hook": "If you don't know what to learn, start writing.",
+      "style": "ANY",
+      "engagement": 4541,
+      "type": "image",
+      "author": "thedankoe",
+      "source": "build-in-public/competitor:@thedankoe"
+    },
+    {
+      "hook": "If you don't have a goal so meaningful it makes other people's opinions irrelevant, you will lose control of your life.",
+      "style": "STAKES",
+      "engagement": 3439,
+      "type": "reel",
+      "author": "thedankoe",
+      "source": "build-in-public/competitor:@thedankoe"
+    },
+    {
+      "hook": "BUILDING MY AT HOME AI MACHINE.",
+      "style": "RESULT/FLEX",
+      "engagement": 1913,
+      "type": "reel",
+      "author": "liambuilds.ai",
+      "source": "build-in-public/competitor:@liambuilds.ai"
+    },
+    {
+      "hook": "POV: waking up to another Stripe notification from an app I built on Replit in one weekend, realizing I spent 4 years at a desk job for nothing",
+      "style": "CONFESSION",
+      "engagement": 1,
+      "type": "reel",
+      "author": "build_with_oliver",
+      "source": "build-in-public/top:buildinpublic"
+    },
+    {
+      "hook": "SOLD FOR $80M. ALONE. No team. No funding. Just him and a laptop.",
+      "style": "RESULT/FLEX",
+      "engagement": 0,
+      "type": "image",
+      "author": "suraj.hustle",
+      "source": "build-in-public/top:indiehacker"
+    }
+  ],
+  "punish_patterns": [
+    "DON'T BE A LUNATIC, BE A PLANATIC.",
+    "HIRING INSIGHTS FOR AI ENTREPRENEURS — attract and hire the best talent",
+    "READY TO BUILD SOMETHING EXTRAORDINARY?",
+    "Last stretch for today friends!",
+    "Do you realize what's happening?",
+    "Major IV COD / HalloW"
+  ]
+}

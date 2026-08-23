@@ -1,0 +1,106 @@
+
+import unittest
+import os
+import sys
+import types
+from pathlib import Path
+from unittest.mock import patch
+from moviepy import (
+    VideoFileClip,
+)
+# add project root to python path
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+from app.models.schema import MaterialInfo
+from app.services import video as vd
+from app.utils import utils
+
+resources_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "resources")
+
+class TestVideoService(unittest.TestCase):
+    def setUp(self):
+        self.test_img_path = os.path.join(resources_dir, "1.png")
+    
+    def tearDown(self):
+        pass
+    
+    def test_preprocess_video(self):
+        if not os.path.exists(self.test_img_path):
+            self.fail(f"test image not found: {self.test_img_path}")
+        
+        # test preprocess_video function
+        m = MaterialInfo()
+        m.url = self.test_img_path
+        m.provider = "local"
+        print(m)
+        
+        materials = vd.preprocess_video([m], clip_duration=4)
+        print(materials)
+        
+        # verify result
+        self.assertIsNotNone(materials)
+        self.assertEqual(len(materials), 1)
+        self.assertTrue(materials[0].url.endswith(".mp4"))
+        
+        # moviepy get video info
+        clip = VideoFileClip(materials[0].url)
+        print(clip)
+        
+        # clean generated test video file
+        if os.path.exists(materials[0].url):
+            os.remove(materials[0].url)
+
+    def test_get_ffmpeg_binary_uses_configured_env_path(self):
+        """配置中显式指定 ffmpeg 时，应优先使用该路径。"""
+        with patch.dict(os.environ, {"IMAGEIO_FFMPEG_EXE": "/tmp/custom-ffmpeg"}, clear=True):
+            self.assertEqual(vd.get_ffmpeg_binary(), "/tmp/custom-ffmpeg")
+
+    def test_get_ffmpeg_binary_falls_back_to_imageio_ffmpeg(self):
+        """
+        Windows 便携包里系统 PATH 可能没有 ffmpeg，但 moviepy 依赖的
+        imageio-ffmpeg 通常会提供可执行文件。这里验证该兜底路径可用。
+        """
+        fake_imageio_ffmpeg = types.SimpleNamespace(
+            get_ffmpeg_exe=lambda: "/tmp/bundled-ffmpeg"
+        )
+
+        with patch.dict(os.environ, {}, clear=True), patch.object(
+            vd.shutil, "which", return_value=None
+        ), patch.dict(sys.modules, {"imageio_ffmpeg": fake_imageio_ffmpeg}):
+            self.assertEqual(vd.get_ffmpeg_binary(), "/tmp/bundled-ffmpeg")
+    
+    def test_wrap_text(self):
+        """test text wrapping function"""
+        try:
+            font_path = os.path.join(utils.font_dir(), "STHeitiMedium.ttc")
+            if not os.path.exists(font_path):
+                self.fail(f"font file not found: {font_path}")
+                
+            # test english text wrapping
+            test_text_en = "This is a test text for wrapping long sentences in english language"
+            
+            wrapped_text_en, text_height_en = vd.wrap_text(
+                text=test_text_en,
+                max_width=300,
+                font=font_path,
+                fontsize=30
+            )
+            print(wrapped_text_en, text_height_en)
+            # verify text is wrapped
+            self.assertIn("\n", wrapped_text_en)
+            
+            # test chinese text wrapping
+            test_text_zh = "这是一段用来测试中文长句换行的文本内容，应该会根据宽度限制进行换行处理"
+            wrapped_text_zh, text_height_zh = vd.wrap_text(
+                text=test_text_zh,
+                max_width=300,
+                font=font_path,
+                fontsize=30
+            )   
+            print(wrapped_text_zh, text_height_zh)
+            # verify chinese text is wrapped
+            self.assertIn("\n", wrapped_text_zh)
+        except Exception as e:
+            self.fail(f"test wrap_text failed: {str(e)}")
+
+if __name__ == "__main__":
+    unittest.main() 

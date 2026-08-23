@@ -1,0 +1,11 @@
+{
+  "_comment": "Visual insert library. Reference an entry by its id in an insert's `image` field, or let the AI-suggest flow keyword-match it via tags/description. Files live under assets/visuals/<subfolder>/.",
+  "entries": {
+    "dashboard": {
+      "file": "screenshots/dashboard.png",
+      "tags": ["dashboard", "studio", "ui", "streamlit", "control", "panel", "app", "interface", "engine"],
+      "description": "The Epifani Growth Engine dashboard / creation studio UI",
+      "secs": 3.0
+    }
+  }
+}

@@ -1,0 +1,1 @@
+I shipped a bug today that deleted three weeks of user data. And honestly it was the best thing that happened to the product. Here is why backups saved my company.
