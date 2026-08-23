@@ -4,26 +4,48 @@ Quick steps to get the Epifani Growth Engine running on Windows. Follow in order
 
 ## 1. Install prerequisites
 
-- **Miniconda** — https://docs.conda.io/en/latest/miniconda.html (Python 3.11+)
-- **FFmpeg** — https://www.gyan.dev/ffmpeg/builds/ (download the "release essentials" zip)
-  - Unzip it somewhere permanent, e.g. `C:\ffmpeg`
-  - Add `C:\ffmpeg\bin` to your PATH: Windows Settings → search "Environment Variables" →
-    edit the `Path` variable under "User variables" → add `C:\ffmpeg\bin`
-  - Verify: open a **new** terminal and run `ffmpeg -version`
-- **Git** (if you're cloning instead of copying the folder) — https://git-scm.com/download/win
+Open **PowerShell** (no need to run as Administrator — `winget` works either way)
+and run:
 
-Use **PowerShell** or **Command Prompt** for everything below — both work.
+```powershell
+winget install -e --id Anaconda.Miniconda3
+winget install -e --id Gyan.FFmpeg
+winget install -e --id Git.Git
+```
+
+Close and reopen PowerShell after this (so the updated PATH and `conda` are
+picked up), then verify everything is on PATH:
+
+```powershell
+conda --version
+ffmpeg -version
+git --version
+```
+
+If `conda` isn't recognized, open **"Anaconda Prompt (miniconda3)"** from the
+Start menu instead — the installer sometimes needs that shell for `conda init`
+to have taken effect — then run `conda init powershell`, close, reopen
+PowerShell, and try again. If `ffmpeg` isn't recognized after reopening, log
+out/in once (winget PATH updates only fully apply on next session).
 
 ## 2. Get the project
 
-Copy or clone the whole `epifaniGrowthPlan` folder (it contains `engine/` and
-`MoneyPrinterTurbo/` — both are required, MoneyPrinterTurbo does the actual video
-assembly) to somewhere on your machine, e.g. `C:\Users\<you>\epifaniGrowthPlan`.
+```powershell
+cd $HOME
+git clone git@github.com:Kleo12345/epifaniGrowth.git epifaniGrowthPlan
+cd epifaniGrowthPlan
+```
+
+(If you haven't set up an SSH key with GitHub on this machine, use the HTTPS
+URL instead: `git clone https://github.com/Kleo12345/epifaniGrowth.git epifaniGrowthPlan`.)
+
+This gets you `engine/` and `MoneyPrinterTurbo/` — both are required,
+MoneyPrinterTurbo does the actual video assembly.
 
 ## 3. Create the conda environment
 
 ```powershell
-cd C:\Users\<you>\epifaniGrowthPlan
+cd $HOME\epifaniGrowthPlan
 conda create -n epifani-growth python=3.11 -y
 conda activate epifani-growth
 
@@ -37,22 +59,25 @@ pip install -r requirements.txt
 ## 4. Configure credentials
 
 ```powershell
-cd ..\engine
+cd $HOME\epifaniGrowthPlan\engine
 copy .env.example .env
+notepad .env
 ```
 
-Open `.env` in a text editor and fill in at least:
+Fill in at least:
 - `GEMINI_API_KEY` — required, scripts are generated with Gemini
 - `EPIFANI_API_URL` — leave as-is if pointing at the same portal; it falls back to a
   local `predictions.json` if the portal isn't reachable
 - Leave any publisher keys (Twitter, TikTok, Instagram, YouTube, ElevenLabs) blank
   until you actually need that platform — the engine skips unconfigured ones
 
-Also copy MoneyPrinterTurbo's config and fill in its own LLM/TTS keys:
+Save and close Notepad, then do the same for MoneyPrinterTurbo's config
+(its own LLM/TTS keys):
 
 ```powershell
 cd ..\MoneyPrinterTurbo
 copy config.example.toml config.toml
+notepad config.toml
 ```
 
 ## 5. Run it
@@ -61,7 +86,7 @@ From `engine\`, with the conda env active:
 
 ```powershell
 conda activate epifani-growth
-cd C:\Users\<you>\epifaniGrowthPlan\engine
+cd $HOME\epifaniGrowthPlan\engine
 
 # CLI — preview today's picks, no posting
 python main.py --list-picks
@@ -86,7 +111,7 @@ python scheduler_ctl.py stop
 
 - Everything above (fonts, scheduler start/stop, MoneyPrinterTurbo launcher) was
   fixed to run natively on Windows — no WSL or Git Bash required.
-- If `ffmpeg -version` fails after adding it to PATH, restart the terminal (PATH
-  changes don't apply to already-open windows).
+- If a command isn't recognized right after a `winget install`, close and reopen
+  the terminal (PATH changes don't apply to already-open windows).
 - First run of `--build-videos` / `--journey-video` will feel slow — MoneyPrinterTurbo
   downloads its models/stock assets on first use.
