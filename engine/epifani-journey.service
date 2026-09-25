@@ -6,7 +6,7 @@ Wants=network-online.target
 [Service]
 Type=simple
 WorkingDirectory=/home/john/dev/python/epifaniGrowthPlan/engine
-ExecStart=/home/john/miniconda3/envs/epifani-growth/bin/python journey_daemon.py
+ExecStart=/home/john/miniconda3/envs/epifani-growth/bin/python -u journey_daemon.py
 Restart=on-failure
 RestartSec=10
 
