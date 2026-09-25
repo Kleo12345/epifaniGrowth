@@ -28,6 +28,20 @@ to have taken effect — then run `conda init powershell`, close, reopen
 PowerShell, and try again. If `ffmpeg` isn't recognized after reopening, log
 out/in once (winget PATH updates only fully apply on next session).
 
+**Optional — Rhubarb Lip Sync** (real phoneme-timed mouth sync for the journey
+avatar; no winget package, so grab the release zip directly):
+
+```powershell
+Invoke-WebRequest -Uri "https://github.com/DanielSWolf/rhubarb-lip-sync/releases/download/v1.14.0/Rhubarb-Lip-Sync-1.14.0-Windows.zip" -OutFile "$HOME\rhubarb.zip"
+Expand-Archive -Path "$HOME\rhubarb.zip" -DestinationPath "$HOME\rhubarb" -Force
+[Environment]::SetEnvironmentVariable("Path", "$env:Path;$HOME\rhubarb\Rhubarb-Lip-Sync-1.14.0-Windows", "User")
+Remove-Item "$HOME\rhubarb.zip"
+```
+
+Close and reopen PowerShell, then verify with `rhubarb --version`. Without it,
+the journey video pipeline falls back to the old amplitude-based lip-flap —
+nothing breaks, the mouth sync is just less accurate.
+
 ## 2. Get the project
 
 ```powershell

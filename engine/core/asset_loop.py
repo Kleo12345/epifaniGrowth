@@ -13,6 +13,7 @@ This is the "Option A" launch pipeline from the vision recap: 100% local, instan
 and the place to drop in the Epifani character clips once they exist.
 """
 import base64
+import json
 import math
 import os
 import random
@@ -57,6 +58,11 @@ BG_COLOR   = "0x0a0e17"   # deep navy
 EL_API_KEY  = os.getenv("ELEVENLABS_API_KEY", "").strip()
 EL_VOICE_ID = os.getenv("ELEVENLABS_VOICE_ID", "pNInz6obpgDQGcFmaJgB").strip()  # default: Adam
 EL_MODEL    = os.getenv("ELEVENLABS_MODEL", "eleven_turbo_v2_5").strip()
+
+# Rhubarb Lip Sync (https://github.com/DanielSWolf/rhubarb-lip-sync) — real
+# phoneme-timed mouth shapes instead of the amplitude-threshold lip-flap.
+# Expected on PATH (like ffmpeg); override with RHUBARB_BIN if installed elsewhere.
+RHUBARB_BIN = os.getenv("RHUBARB_BIN", "rhubarb")
 
 
 # ── helpers ───────────────────────────────────────────────────────
@@ -389,6 +395,55 @@ def _frame_loudness(audio: Path, n_frames: int) -> np.ndarray:
     return rms / peak
 
 
+# Rhubarb's 9 Preston-Blair-style mouth shapes, collapsed onto whichever of our
+# 3 poses (closed/mid/open) exist. X/A are closed-mouth (silence, M/B/P); D is
+# the one wide-open vowel shape; everything else reads fine as "mid".
+_RHUBARB_SHAPE_TO_POSE = {
+    "X": "closed", "A": "closed",
+    "B": "mid", "C": "mid", "E": "mid", "F": "mid", "G": "mid", "H": "mid",
+    "D": "open",
+}
+
+
+def _rhubarb_cues(audio: Path) -> list[dict] | None:
+    """Run Rhubarb Lip Sync on `audio` → mouth cues [{start,end,value}], or None
+    if the binary is missing or the run fails (caller falls back to the
+    amplitude-based lip-flap). Uses the phonetic recognizer — no English dialog/
+    language model needed, so it also works for the Spanish dub.
+    """
+    wav = audio.with_suffix(".rhubarb.wav")
+    out_json = audio.with_suffix(".rhubarb.json")
+    try:
+        _run(["ffmpeg", "-y", "-v", "error", "-i", str(audio),
+              "-ar", "16000", "-ac", "1", str(wav)])
+        result = subprocess.run(
+            [RHUBARB_BIN, "-f", "json", "-o", str(out_json),
+             "--recognizer", "phonetic", str(wav)],
+            capture_output=True, text=True, timeout=120,
+        )
+        if result.returncode != 0:
+            print(f"  ⚠ Rhubarb failed ({result.returncode}): {result.stderr.strip()[:200]}")
+            return None
+        return json.loads(out_json.read_text()).get("mouthCues", [])
+    except Exception as e:
+        print(f"  ⚠ Rhubarb unavailable ({e}) — falling back to amplitude-based lip-flap.")
+        return None
+    finally:
+        wav.unlink(missing_ok=True)
+        out_json.unlink(missing_ok=True)
+
+
+def _rhubarb_pose_frames(cues: list[dict], n_frames: int) -> list[str]:
+    """Mouth cues → one pose name ("closed"/"mid"/"open") per frame."""
+    poses = ["closed"] * n_frames
+    for cue in cues:
+        pose = _RHUBARB_SHAPE_TO_POSE.get(cue.get("value"), "mid")
+        start_f, end_f = int(cue["start"] * FPS), int(cue["end"] * FPS)
+        for k in range(max(0, start_f), min(n_frames, end_f)):
+            poses[k] = pose
+    return poses
+
+
 # Character motion. Body stays calm — only the FACE talks. The one remaining body
 # motion is a slow IDLE bob (not tied to speech), so he's alive but doesn't lurch
 # every time he speaks. Speech-tied whole-body motion (lean/zoom) is off by default.
@@ -454,6 +509,9 @@ def _build_character_layer(audio: Path, duration: float, poses: dict,
     n_frames = int(round(duration * FPS))
     loud = _frame_loudness(audio, n_frames)
 
+    rhubarb_cues = _rhubarb_cues(audio)
+    rhubarb_poses = _rhubarb_pose_frames(rhubarb_cues, n_frames) if rhubarb_cues is not None else None
+
     # voiced mask with micro-gap merge (so short between-word dips aren't "pauses")
     voiced = [bool(v > 0.12) for v in loud]
     min_pause = max(1, int(0.30 * FPS))
@@ -491,7 +549,7 @@ def _build_character_layer(audio: Path, duration: float, poses: dict,
     rest_smile = False
     for k in range(n_frames):
         if voiced[k]:
-            target = "open" if e[k] > _MOUTH_HI else "mid"
+            target = rhubarb_poses[k] if rhubarb_poses else ("open" if e[k] > _MOUTH_HI else "mid")
         else:
             target = "smile" if rest_smile else "closed"
         if target == want:
