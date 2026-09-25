@@ -255,7 +255,7 @@ _JOURNEY_WRITER = """Write today's talk-to-camera voiceover (a TikTok/Reels/Shor
 CONTEXT
 - Day {day} of building Epifani in public.
 - What he actually did today (his words): "{milestone}"
-- The engine's top {n_picks} picks today (drop these in casually as proof, not tips):
+{content_frame_line}- The engine's top {n_picks} picks today (drop these in casually as proof, not tips):
 {picks_block}
 
 HARD LIMIT: under {target_words} words (~{target_secs}s). Shorter is better. Cut anything that sounds written.
@@ -345,6 +345,38 @@ HOOK_STYLES = [
     "(e.g. 'Every football prediction account you've seen is selling you something. "
     "So I'm building one where you can check the math.').",
 ]
+
+# content_calendar.py entries carry a short hook keyword (CONFESSION, CURIOSITY,
+# STAKES, TRUST, STRUGGLE, FLEX); map that straight onto the matching HOOK_STYLES
+# entry so a calendar day always drives the same opener family it names.
+_CALENDAR_HOOK_TO_STYLE = {
+    "STRUGGLE": HOOK_STYLES[0],
+    "STAKES": HOOK_STYLES[1],
+    "CURIOSITY": HOOK_STYLES[2],
+    "FLEX": HOOK_STYLES[3],
+    "CONFESSION": HOOK_STYLES[4],
+    "TRUST": HOOK_STYLES[5],
+}
+
+
+def hook_style_for_calendar(calendar_hook: str | None) -> str | None:
+    """The HOOK_STYLES entry a content_calendar hook keyword maps to, or None
+    (caller falls back to a random style) if it isn't recognized."""
+    if not calendar_hook:
+        return None
+    return _CALENDAR_HOOK_TO_STYLE.get(calendar_hook.strip().upper())
+
+
+# content_calendar.py fam -> a one-line steer for the writer prompt, so a "tech"
+# explainer day and a "human" confession day don't both get framed as "what he
+# built today" when the calendar topic itself isn't a daily-build recap.
+CONTENT_FRAME_BY_FAM = {
+    "human": "a personal, in-the-moment confession or anecdote about the build.",
+    "build": "a straightforward feature/engineering update — what got built and why.",
+    "tech": "a short explainer of the technical concept below, tied back to the build "
+            "in a line or two — not a lecture, still first-person and casual.",
+    "proof": "evidence/trust content — make the claim checkable, don't just assert it.",
+}
 
 
 # ── CTA modes ────────────────────────────────────────────────────────────────
@@ -534,11 +566,12 @@ def generate_journey_script(
     max_revisions: int = 2,
     hook_style: str | None = None,
     cta_mode: str | None = None,
+    content_frame: str | None = None,
 ) -> JourneyScript:
     """Generate a first-person Founder's Journey voiceover script, vetted by an LLM critic.
 
     picks         : today's picks (sorted best-first); top `proof_picks` are woven in as proof.
-    milestone     : the founder's daily building update (from the dashboard / CLI).
+    milestone     : the founder's daily building update (from the dashboard / CLI / content_calendar).
     min_score     : average critic score (hook/human/flow) required to ship.
     min_hook      : hard floor on the hook axis (strict — the scroll-stopper matters most).
     min_safe      : hard floor on the compliance axis (no betting/tipster language).
@@ -547,6 +580,8 @@ def generate_journey_script(
     hook_style    : one of HOOK_STYLES; random if not given (A/B variety across videos).
     cta_mode      : "site" (link CTA, default) or "comment" (comment-gate → DM);
                     falls back to env CTA_MODE.
+    content_frame : optional one-line steer on how to treat `milestone` (e.g. an explainer
+                    vs. a confession) — see content_calendar.CONTENT_FRAME_BY_FAM.
     """
     if not milestone or not milestone.strip():
         raise ValueError("A daily milestone is required to generate a journey script.")
@@ -566,6 +601,7 @@ def generate_journey_script(
     writer_prompt = _JOURNEY_WRITER.format(
         day=day,
         milestone=milestone.strip(),
+        content_frame_line=(f"- Today's content angle: {content_frame}\n" if content_frame else ""),
         n_picks=n_picks,
         picks_block=picks_block,
         target_secs=target_secs,
@@ -749,12 +785,15 @@ def generate_track_record_script(
     min_trust: float = 8.0,
     max_revisions: int = 2,
     cta_mode: str | None = None,
+    revision_note: str | None = None,
 ) -> JourneyScript:
     """Generate a "Model Track Record" video script from the portal's performance data.
 
-    perf    : dict from prediction_fetcher.fetch_performance().
-    winners : optional list from fetch_recent_winners() for colour.
-    cta_mode: "site" (link CTA, default) or "comment" (comment-gate → DM).
+    perf          : dict from prediction_fetcher.fetch_performance().
+    winners       : optional list from fetch_recent_winners() for colour.
+    cta_mode      : "site" (link CTA, default) or "comment" (comment-gate → DM).
+    revision_note : optional founder feedback from a prior take (e.g. from the Telegram
+                    Regenerate flow) — folded into the writer prompt as a rewrite note.
     Same critic/hook/safe gates as the journey script; reuses the JourneyScript shape.
     """
     if not perf or not perf.get("sample"):
@@ -777,6 +816,8 @@ def generate_track_record_script(
         cta_direction=_cta_direction(cta_mode, "the model's current calls and its full record"),
         caption_rule=_caption_rule(cta_mode),
     )
+    if revision_note and revision_note.strip():
+        writer_prompt += f"\n\nFOUNDER'S REVISION NOTE — apply this feedback in the rewrite: {revision_note.strip()}"
     resp = call_gemini_with_retry(
         client=client, model=model,
         contents=f"{_JOURNEY_SYSTEM}\n\n{writer_prompt}",

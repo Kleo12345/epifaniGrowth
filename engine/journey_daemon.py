@@ -1,14 +1,17 @@
 #!/usr/bin/env python3
 """
-Telegram-driven Founder's Journey daemon — the automated version of:
-  python main.py --journey-video --milestone "..."
+Telegram-driven Founder's Journey daemon — fully automated against the Plan A+
+content calendar (core/content_calendar.py, 44 days).
 
-Every day at 08:50 Europe/Athens the bot asks what you built today. Reply
-in Telegram with a short milestone and it generates the journey video the
-same way `--journey-video` does, then sends it back with Approve/Regenerate
-buttons. Send any text before tapping Regenerate and it's used as a rewrite
-note for the next take. Approve just marks the video done — posting is
-still manual (dashboard or `main.py --post-social`), by design.
+Every day at 08:50 Europe/Athens the daemon looks up today's calendar day
+(core.script_generator.project_day), generates that day's video straight from
+the calendar's topic/hook/family — no prompt, no waiting on a reply — and
+sends it to Telegram with Approve/Regenerate buttons. Send any text before
+tapping Regenerate and it's used as a rewrite note for the next take; tap
+Regenerate with no text and it just takes another pass at the same topic.
+Approve just marks the video done — posting is still manual (dashboard or
+`main.py --post-social`), by design. Once day 45 arrives (the calendar is
+exhausted) it falls back to asking what you built, same as before.
 
 Run with:
   conda activate epifani-growth
@@ -34,8 +37,16 @@ load_dotenv()
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from core import telegram_bot as tg
-from core.prediction_fetcher import fetch_picks
-from core.script_generator import ScriptQualityError, generate_journey_script, project_day
+from core.content_calendar import calendar_entry
+from core.prediction_fetcher import fetch_picks, fetch_performance, fetch_recent_winners
+from core.script_generator import (
+    CONTENT_FRAME_BY_FAM,
+    ScriptQualityError,
+    generate_journey_script,
+    generate_track_record_script,
+    hook_style_for_calendar,
+    project_day,
+)
 from core.video_builder import build_journey_video, stop_mpt
 
 TIMEZONE = "Europe/Athens"
@@ -47,8 +58,10 @@ OFFSET_PATH = Path(__file__).resolve().parent / "assets" / "output" / "telegram_
 
 # ── State ──────────────────────────────────────────────────────────
 # journey_state.json: {date, status, milestone, feedback, video_path,
-#                       video_message_id, attempts}
+#                       video_message_id, attempts, calendar_day, fam, hook, kind}
 # status: idle | awaiting_milestone | generating | awaiting_approval | error | approved
+# kind: "journey" (calendar topic / freeform milestone) | "record" (weekly track-record
+#       check-in, built from real performance data instead of a topic)
 
 def _load_state() -> dict:
     if STATE_PATH.exists():
@@ -70,6 +83,10 @@ def _fresh_state_for_today() -> dict:
         "video_path": None,
         "video_message_id": None,
         "attempts": 0,
+        "calendar_day": None,
+        "fam": None,
+        "hook": None,
+        "kind": None,
     }
 
 
@@ -87,33 +104,64 @@ def _own_chat_id() -> str:
 
 # ── Pipeline ───────────────────────────────────────────────────────
 
+def _report_quality_failure(state: dict, e: ScriptQualityError) -> None:
+    state["status"] = "error"
+    state["attempts"] += 1
+    _save_state(state)
+    tg.send_message(
+        f"✗ Script never cleared the quality gate after {e.revisions} rewrite(s) "
+        f"(avg {e.scores['avg']}). Tap Regenerate to try again, or send a note first.",
+        reply_markup=tg.RETRY_KEYBOARD,
+    )
+
+
 def _generate_and_send(state: dict) -> None:
     state["status"] = "generating"
     _save_state(state)
 
-    milestone = state["milestone"]
-    if state.get("feedback"):
-        milestone = f"{milestone}\n\n(Revision note for this take: {state['feedback']})"
-
+    feedback = state.get("feedback")
+    hook_style = hook_style_for_calendar(state.get("hook"))
     tg.send_message("⚙️ Generating today's video, hang tight...")
-    try:
-        picks = fetch_picks(exclude_corners=True, top=3)
-    except Exception as e:
-        picks = []
-        print(f"  ⚠ fetch_picks failed: {e}")
 
-    try:
-        script = generate_journey_script(picks, milestone=milestone)
-    except ScriptQualityError as e:
-        state["status"] = "error"
-        state["attempts"] += 1
-        _save_state(state)
-        tg.send_message(
-            f"✗ Script never cleared the quality gate after {e.revisions} rewrite(s) "
-            f"(avg {e.scores['avg']}). Tap Regenerate to try again, or send a note first.",
-            reply_markup=tg.RETRY_KEYBOARD,
-        )
-        return
+    if state.get("kind") == "record":
+        try:
+            perf = fetch_performance()
+            winners = fetch_recent_winners()
+        except Exception as e:
+            perf, winners = None, []
+            print(f"  ⚠ fetch_performance/fetch_recent_winners failed: {e}")
+        try:
+            script = generate_track_record_script(
+                perf, winners, hook_style=hook_style, revision_note=feedback or "",
+            )
+        except ValueError as e:
+            state["status"] = "error"
+            state["attempts"] += 1
+            _save_state(state)
+            tg.send_message(f"✗ No performance data available for today's record check-in: {e}",
+                             reply_markup=tg.RETRY_KEYBOARD)
+            return
+        except ScriptQualityError as e:
+            _report_quality_failure(state, e)
+            return
+        picks = []
+    else:
+        milestone = state["milestone"]
+        if feedback:
+            milestone = f"{milestone}\n\n(Revision note for this take: {feedback})"
+        try:
+            picks = fetch_picks(exclude_corners=True, top=3)
+        except Exception as e:
+            picks = []
+            print(f"  ⚠ fetch_picks failed: {e}")
+        try:
+            script = generate_journey_script(
+                picks, milestone=milestone, hook_style=hook_style,
+                content_frame=CONTENT_FRAME_BY_FAM.get(state.get("fam")),
+            )
+        except ScriptQualityError as e:
+            _report_quality_failure(state, e)
+            return
 
     result = build_journey_video(picks, script=script)
     if not result.get("video_path"):
@@ -135,15 +183,36 @@ def _generate_and_send(state: dict) -> None:
     _save_state(state)
 
 
-def job_prompt_milestone() -> None:
-    """08:50 Athens — ask what today's milestone is, unless today's already handled."""
+def job_generate_daily() -> None:
+    """08:50 Athens — auto-generate today's calendar-day video, no prompt needed.
+
+    Falls back to asking for a freeform milestone once Plan A+ (44 days) runs out.
+    """
     state = _today_state()
     if state["status"] != "idle":
         return
     day = project_day()
-    state["status"] = "awaiting_milestone"
+    entry = calendar_entry(day)
+    if entry is None:
+        state["status"] = "awaiting_milestone"
+        _save_state(state)
+        tg.send_message(
+            f"☀️ Day {day} — Plan A+ calendar (44 days) is done. What did you build/work "
+            f"on today? Reply here to generate the video, freeform."
+        )
+        return
+
+    milestone = entry["topic"]
+    if entry.get("note"):
+        milestone = f"{milestone} ({entry['note']})"
+
+    state["calendar_day"] = day
+    state["fam"] = entry["fam"]
+    state["hook"] = entry["hook"]
+    state["kind"] = entry["kind"]
+    state["milestone"] = milestone
     _save_state(state)
-    tg.send_message(f"☀️ Day {day} — what did you build/work on today? Reply here to generate the video.")
+    _generate_and_send(state)
 
 
 # ── Telegram event handling ────────────────────────────────────────
@@ -211,12 +280,12 @@ def run() -> None:
 
     scheduler = BackgroundScheduler(timezone=TIMEZONE)
     scheduler.add_job(
-        job_prompt_milestone,
+        job_generate_daily,
         CronTrigger(hour=PROMPT_HOUR, minute=PROMPT_MINUTE, timezone=TIMEZONE),
-        id="prompt_milestone",
+        id="generate_daily",
     )
     scheduler.start()
-    print(f"Journey daemon started — prompts daily at {PROMPT_HOUR:02d}:{PROMPT_MINUTE:02d} {TIMEZONE}")
+    print(f"Journey daemon started — generates daily at {PROMPT_HOUR:02d}:{PROMPT_MINUTE:02d} {TIMEZONE}")
 
     offset = _load_offset()
     try:
