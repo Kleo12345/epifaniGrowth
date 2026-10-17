@@ -123,7 +123,9 @@ def fetch_picks(
     """
     data = None
     try:
-        resp = requests.get(API_URL, timeout=10)
+        # Without the secret the portal only returns the free tier (today's Top 3).
+        headers = {"Authorization": f"Bearer {os.getenv('API_UPDATE_SECRET', '')}"}
+        resp = requests.get(API_URL, headers=headers, timeout=10)
         resp.raise_for_status()
         data = resp.json()
     except requests.RequestException:
