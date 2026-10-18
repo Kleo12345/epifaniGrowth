@@ -13,6 +13,11 @@ load_dotenv()
 API_URL = os.getenv("EPIFANI_API_URL", "http://localhost:3000/api/predictions")
 MIN_CONFIDENCE = float(os.getenv("MIN_CONFIDENCE", "0.60"))
 VALUE_BETS_ONLY = os.getenv("VALUE_BETS_ONLY", "true").lower() == "true"
+# Only these markets can appear in content: Epifani's Core3 strategy (the markets the
+# website stakes on). BTTS and Double Chance lost on live CLV, so publicly featuring
+# them would damage the track record the videos are meant to build.
+VIDEO_MARKETS = frozenset(m.strip() for m in os.getenv(
+    "VIDEO_MARKETS", "Result (1/X/2),U/O-2.5,DNB").split(",") if m.strip())
 
 # Local JSON written by the portal's Python exporter — used as fallback
 _LOCAL_JSON = os.path.join(
@@ -115,6 +120,7 @@ def fetch_picks(
     """
     Calls the Epifani predictions API and returns one Pick per match
     (the single highest-confidence value bet per match that isn't excluded).
+    Only markets in VIDEO_MARKETS (Core3 by default) are ever considered.
 
     When a market is excluded the match falls back to its next-best qualifying
     pick rather than disappearing from the list entirely.
@@ -186,6 +192,7 @@ def fetch_picks(
                 mkt = "DNB"
             if (p["probability"] >= MIN_CONFIDENCE
                 and (not _value_only or p.get("is_value", False))
+                and mkt in VIDEO_MARKETS
                 and mkt not in _excluded):
                 p_copy = dict(p)
                 p_copy["market"] = mkt
