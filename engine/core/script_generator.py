@@ -214,8 +214,7 @@ class JourneyScript:
 
     @property
     def est_seconds(self) -> int:
-        # ~2.6 spoken words/sec at a natural short-form pace
-        return round(self.word_count / 2.6)
+        return round(self.word_count / WORDS_PER_SEC)
 
 
 _JOURNEY_SYSTEM = """You are ghost-writing a talk-to-camera voiceover AS the founder of "Epifani" —
@@ -260,14 +259,21 @@ CONTEXT
 
 HARD LIMIT: under {target_words} words (~{target_secs}s). Shorter is better. Cut anything that sounds written.
 
-HOOK DIRECTION for today (the first line must stop the scroll in the first 3 seconds): {hook_style}
+TOPIC COMES FIRST. Everything concrete you say — the story, any number, any incident — must come from
+"what he actually did today" above. Never invent a detail (a bug, a metric, an event) that isn't in it.
+
+HOOK DIRECTION for today (an opening ENERGY to serve the topic, not a plot point to force onto it):
+{hook_style}
+If this direction doesn't literally fit today's topic (e.g. CONFESSION but nothing above is a mistake),
+bend the ENERGY to the topic's own shape instead of fabricating one — a confession can be admitting
+you're nervous to post this, or a doubt you had before making the call in the topic, never a made-up incident.
 
 SHAPE (loose, not a template — it should feel like one continuous thought)
-- Open with the hook direction above — a real, specific first line. NOT a slogan, NOT "Day X of...",
-  NOT a status update ("today I worked on / wired up / finished..."). If the hook direction points at
-  a number or outcome (RESULT/FLEX, STAKES), that number goes in the FIRST sentence — the dev work is
-  what comes after to explain it, never what you lead with.
-- Then tell what he actually built today and why it mattered or annoyed him. Concrete.
+- Open with a real, specific first line in that energy, grounded in the topic above. NOT a slogan,
+  NOT "Day X of...", NOT a status update ("today I worked on / wired up / finished..."). If the hook
+  direction points at a number or outcome (RESULT/FLEX, STAKES) and the topic has one, lead with it —
+  the dev work comes after to explain it, never before.
+- Then tell what he actually built today (per the topic above) and why it mattered or annoyed him. Concrete.
 - Slide into the picks like an aside ("oh and the engine's calling..."), team + the call + confidence. Don't hard-sell.
 {cta_direction}
 
@@ -288,6 +294,9 @@ Return EXACTLY this format and nothing else:
 _JOURNEY_CRITIC = """You are a ruthless short-form editor for a build-in-public founder channel.
 Be honest — most first drafts are a 5-6. You HATE anything that sounds like marketing or AI-written copy.
 
+TODAY'S ACTUAL TOPIC — ground truth from the real project's own content calendar, not a suggestion:
+\"\"\"{milestone}\"\"\"
+
 VOICEOVER:
 \"\"\"{voiceover}\"\"\"
 
@@ -297,9 +306,10 @@ Rate each 1-10:
 - flow: does the build story slide naturally into the pick and a soft ending?
 - safe: does it stay a BUILD-IN-PUBLIC / tech story and treat any pick as the MODEL'S prediction/proof, NOT betting advice? Score 1-3 if it tells people to bet/stake/back a pick, uses "lock/banker/guaranteed/easy money", or reads like a tipster/gambling promo. Score 9-10 only if a platform moderator would see a developer talking about their AI, not gambling promotion. (A CTA asking viewers to comment a keyword to get the MODEL'S OUTPUT by DM is fine — that's a product CTA, don't punish it — unless it promises winnings or frames the DM as betting tips.)
 - trust: this niche is full of SCAM capper/tipster accounts, and viewers pattern-match on shape. Would a scam-burned viewer read this as a transparent builder or as another capper? Score 1-3 if it flexes win rates with zero build/process/honesty content, uses urgency or hype, or makes claims with no sample size and no way to check them. Score 9-10 only if the numbers are tied to samples, fallibility or limits are acknowledged (or nothing needs acknowledging), and it sounds like someone showing their work, not selling a dream. (Percentages themselves are fine; a comment-gate CTA is fine.)
+- topic: does the voiceover actually talk about TODAY'S ACTUAL TOPIC above — not generic build-in-public filler, not a different story from another day, and not a fabricated specific (a bug, a number, an incident) that isn't in the topic text? Score 1-3 if it drifts to an unrelated story or invents a concrete detail the topic doesn't support. Score 9-10 only if every concrete claim in the voiceover traces back to the topic.
 
 Return ONLY a JSON object, no markdown fences:
-{{"hook": <int>, "human": <int>, "flow": <int>, "safe": <int>, "trust": <int>, "critique": "<one or two sentences of concrete, actionable fixes; if safe or trust < 8 say exactly what language to remove or add>"}}"""
+{{"hook": <int>, "human": <int>, "flow": <int>, "safe": <int>, "trust": <int>, "topic": <int>, "critique": "<one or two sentences of concrete, actionable fixes; if safe or trust < 8 say exactly what language to remove or add; if topic < 8 say what it drifted from or invented>"}}"""
 
 _JOURNEY_REWRITE = """Revise this voiceover using the editor's note. Keep it as ONE natural spoken thought —
 casual, first person, specific, imperfect, like a real founder talking to camera. Kill any marketing/ad tone
@@ -392,6 +402,10 @@ CTA_MODES = ("site", "comment")
 # capper accounts, and "picks" is their vocabulary — a tech-flavored keyword
 # keeps the mechanic without the tipster smell.
 COMMENT_GATE_WORD = os.getenv("COMMENT_GATE_WORD", "MODEL")
+
+# ~2.6 spoken words/sec at a natural pace, scaled by the TTS tempo (asset_loop.VOICE_SPEED)
+# so a faster voice gets a longer script and the video keeps its length.
+WORDS_PER_SEC = 2.6 * min(1.2, max(0.7, float(os.getenv("VOICE_SPEED", "1.15"))))
 
 
 def _resolve_cta_mode(cta_mode: str | None) -> str:
@@ -495,13 +509,16 @@ def _parse_sections(raw: str) -> dict:
     return {k: v.strip() for k, v in sections.items()}
 
 
-def _critique(client, model, voiceover: str) -> tuple[dict, str]:
+def _critique(client, model, voiceover: str, milestone: str = "") -> tuple[dict, str]:
     """Run the LLM critic. Returns (scores, critique_text).
 
-    scores = {"hook","human","flow","safe","avg"} (floats). On unparseable output
-    it returns perfect scores so a misbehaving critic never blocks the pipeline.
+    scores = {"hook","human","flow","safe","trust","topic","avg"} (floats). `milestone`
+    is today's real calendar topic, passed to the critic as ground truth so it can judge
+    whether the voiceover actually stays on-topic rather than drifting or inventing
+    specifics. On unparseable output it returns perfect scores so a misbehaving critic
+    never blocks the pipeline.
     """
-    prompt = _JOURNEY_CRITIC.format(voiceover=voiceover)
+    prompt = _JOURNEY_CRITIC.format(voiceover=voiceover, milestone=milestone or "(none given)")
     punish = _critic_punish_block()
     if punish:
         prompt = prompt.replace("Return ONLY a JSON object", punish + "\nReturn ONLY a JSON object")
@@ -515,27 +532,30 @@ def _critique(client, model, voiceover: str) -> tuple[dict, str]:
         flow = float(data.get("flow", 0))
         safe = float(data.get("safe", 10))    # default safe if the critic omits it
         trust = float(data.get("trust", 10))  # default trusted if the critic omits it
+        topic = float(data.get("topic", 10))  # default on-topic if the critic omits it
         avg = round((hook + human + flow) / 3, 1)
         return ({"hook": hook, "human": human, "flow": flow, "safe": safe,
-                 "trust": trust, "avg": avg},
+                 "trust": trust, "topic": topic, "avg": avg},
                 str(data.get("critique", "")).strip())
     except (json.JSONDecodeError, ValueError):
         # If the critic misbehaves, don't block the pipeline.
         return ({"hook": 10.0, "human": 10.0, "flow": 10.0, "safe": 10.0,
-                 "trust": 10.0, "avg": 10.0},
+                 "trust": 10.0, "topic": 10.0, "avg": 10.0},
                 "(critic returned unparseable output — skipped)")
 
 
 def _needs_rewrite(scores: dict, min_score: float, min_hook: float, min_safe: float,
-                   min_trust: float = 8.0) -> bool:
+                   min_trust: float = 8.0, min_topic: float = 8.0) -> bool:
     """Ship-gate: overall quality must clear min_score, AND the hook, the
-    compliance/safe axis, and the anti-scam/trust axis each have their own hard
-    floor (a weak hook, betting/tipster drift, or capper-shaped content forces a
-    rewrite even if the average looks fine)."""
+    compliance/safe axis, the anti-scam/trust axis, and the on-topic axis each have
+    their own hard floor (a weak hook, betting/tipster drift, capper-shaped content,
+    or a script that drifted off/invented today's topic forces a rewrite even if the
+    average looks fine)."""
     return (scores["avg"] < min_score
             or scores["hook"] < min_hook
             or scores["safe"] < min_safe
-            or scores.get("trust", 10.0) < min_trust)
+            or scores.get("trust", 10.0) < min_trust
+            or scores.get("topic", 10.0) < min_topic)
 
 
 class ScriptQualityError(RuntimeError):
@@ -551,7 +571,8 @@ class ScriptQualityError(RuntimeError):
         super().__init__(
             f"Script failed the quality gate after {revisions} revision(s) — "
             f"avg {scores['avg']} | hook {scores['hook']} | safe {scores['safe']} "
-            f"| trust {scores.get('trust', 10.0)}. Critique: {critique}"
+            f"| trust {scores.get('trust', 10.0)} | topic {scores.get('topic', 10.0)}. "
+            f"Critique: {critique}"
         )
 
 
@@ -563,6 +584,7 @@ def generate_journey_script(
     min_hook: float = 8.0,
     min_safe: float = 8.0,
     min_trust: float = 8.0,
+    min_topic: float = 8.0,
     max_revisions: int = 2,
     hook_style: str | None = None,
     cta_mode: str | None = None,
@@ -572,10 +594,14 @@ def generate_journey_script(
 
     picks         : today's picks (sorted best-first); top `proof_picks` are woven in as proof.
     milestone     : the founder's daily building update (from the dashboard / CLI / content_calendar).
+                    This is the ground truth the critic checks the script against — it drives the
+                    content; `hook_style` only shapes the opening line's energy, never the substance.
     min_score     : average critic score (hook/human/flow) required to ship.
     min_hook      : hard floor on the hook axis (strict — the scroll-stopper matters most).
     min_safe      : hard floor on the compliance axis (no betting/tipster language).
     min_trust     : hard floor on the anti-scam axis (must not pattern-match capper content).
+    min_topic     : hard floor on the on-topic axis (must stay true to `milestone`, never drift
+                    or invent a specific the topic doesn't contain).
     max_revisions : how many rewrite passes to attempt before giving up.
     hook_style    : one of HOOK_STYLES; random if not given (A/B variety across videos).
     cta_mode      : "site" (link CTA, default) or "comment" (comment-gate → DM);
@@ -592,7 +618,7 @@ def generate_journey_script(
     picks_block = "\n".join(_pick_line(p) for p in proof) if proof else "- (no qualifying picks today)"
     n_picks = len(proof)
     target_secs = 35
-    target_words = round(target_secs * 2.6)
+    target_words = round(target_secs * WORDS_PER_SEC)
     hook_style = hook_style or random.choice(HOOK_STYLES)
 
     client = _get_client()
@@ -620,11 +646,12 @@ def generate_journey_script(
         raise ValueError(f"Writer returned no voiceover. Raw output:\n{resp.text}")
 
     # ── Critic → rewrite loop ─────────────────────────────────────
-    scores, critique = _critique(client, model, voiceover)
+    scores, critique = _critique(client, model, voiceover, milestone=milestone)
     revisions = 0
-    while _needs_rewrite(scores, min_score, min_hook, min_safe, min_trust) and revisions < max_revisions:
+    while _needs_rewrite(scores, min_score, min_hook, min_safe, min_trust, min_topic) and revisions < max_revisions:
         print(f"  ✎ Critic: avg {scores['avg']} | hook {scores['hook']} | safe {scores['safe']} "
-              f"| trust {scores.get('trust', 10.0)} — rewriting ({revisions + 1}/{max_revisions})")
+              f"| trust {scores.get('trust', 10.0)} | topic {scores.get('topic', 10.0)} — "
+              f"rewriting ({revisions + 1}/{max_revisions})")
         print(f"    Critique: {critique}")
         rewrite_prompt = _JOURNEY_REWRITE.format(critique=critique, voiceover=voiceover)
         resp = call_gemini_with_retry(
@@ -632,7 +659,7 @@ def generate_journey_script(
             contents=f"{_JOURNEY_SYSTEM}\n\n{rewrite_prompt}",
         )
         voiceover = resp.text.strip()
-        scores, critique = _critique(client, model, voiceover)
+        scores, critique = _critique(client, model, voiceover, milestone=milestone)
         revisions += 1
 
     # ── Hard length gate ──────────────────────────────────────────
@@ -650,12 +677,12 @@ def generate_journey_script(
         voiceover = resp.text.strip()
         condense_passes += 1
     if condense_passes:
-        scores, critique = _critique(client, model, voiceover)
+        scores, critique = _critique(client, model, voiceover, milestone=milestone)
 
     voiceover = _ensure_comment_gate(voiceover, cta_mode,
                                      "what the model's calling today")
 
-    if _needs_rewrite(scores, min_score, min_hook, min_safe, min_trust):
+    if _needs_rewrite(scores, min_score, min_hook, min_safe, min_trust, min_topic):
         raise ScriptQualityError(scores, critique, voiceover, revisions)
 
     return JourneyScript(
@@ -783,6 +810,7 @@ def generate_track_record_script(
     min_hook: float = 8.0,
     min_safe: float = 8.0,
     min_trust: float = 8.0,
+    min_topic: float = 8.0,
     max_revisions: int = 2,
     cta_mode: str | None = None,
     revision_note: str | None = None,
@@ -794,21 +822,26 @@ def generate_track_record_script(
     cta_mode      : "site" (link CTA, default) or "comment" (comment-gate → DM).
     revision_note : optional founder feedback from a prior take (e.g. from the Telegram
                     Regenerate flow) — folded into the writer prompt as a rewrite note.
-    Same critic/hook/safe gates as the journey script; reuses the JourneyScript shape.
+    Same critic/hook/safe/topic gates as the journey script; reuses the JourneyScript shape.
     """
     if not perf or not perf.get("sample"):
         raise ValueError("No performance data (empty sample) to build a track-record script.")
 
     cta_mode = _resolve_cta_mode(cta_mode)
     target_secs = 30
-    target_words = round(target_secs * 2.6)
+    target_words = round(target_secs * WORDS_PER_SEC)
     hook_style = hook_style or random.choice(HOOK_STYLES)
 
     client = _get_client()
     model = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
 
+    stats_block = _perf_stats_block(perf)
+    # The critic's "ground truth" for a record check-in is the real stats themselves,
+    # not an invented story — same topic-fidelity check as a calendar milestone.
+    topic = f"Weekly track-record check-in using the model's real performance stats:\n{stats_block}"
+
     writer_prompt = _TRACK_WRITER.format(
-        stats_block=_perf_stats_block(perf),
+        stats_block=stats_block,
         winners_block=_winners_block(winners or []),
         target_secs=target_secs,
         target_words=target_words,
@@ -827,11 +860,12 @@ def generate_track_record_script(
     if not voiceover:
         raise ValueError(f"Writer returned no voiceover. Raw output:\n{resp.text}")
 
-    scores, critique = _critique(client, model, voiceover)
+    scores, critique = _critique(client, model, voiceover, milestone=topic)
     revisions = 0
-    while _needs_rewrite(scores, min_score, min_hook, min_safe, min_trust) and revisions < max_revisions:
+    while _needs_rewrite(scores, min_score, min_hook, min_safe, min_trust, min_topic) and revisions < max_revisions:
         print(f"  ✎ Critic: avg {scores['avg']} | hook {scores['hook']} | safe {scores['safe']} "
-              f"| trust {scores.get('trust', 10.0)} — rewriting ({revisions + 1}/{max_revisions})")
+              f"| trust {scores.get('trust', 10.0)} | topic {scores.get('topic', 10.0)} — "
+              f"rewriting ({revisions + 1}/{max_revisions})")
         print(f"    Critique: {critique}")
         rewrite_prompt = _JOURNEY_REWRITE.format(critique=critique, voiceover=voiceover)
         resp = call_gemini_with_retry(
@@ -839,7 +873,7 @@ def generate_track_record_script(
             contents=f"{_JOURNEY_SYSTEM}\n\n{rewrite_prompt}",
         )
         voiceover = resp.text.strip()
-        scores, critique = _critique(client, model, voiceover)
+        scores, critique = _critique(client, model, voiceover, milestone=topic)
         revisions += 1
 
     max_words = round(target_words * 1.2)
@@ -854,12 +888,12 @@ def generate_track_record_script(
         voiceover = resp.text.strip()
         passes += 1
     if passes:
-        scores, critique = _critique(client, model, voiceover)
+        scores, critique = _critique(client, model, voiceover, milestone=topic)
 
     voiceover = _ensure_comment_gate(voiceover, cta_mode,
                                      "the model's current calls and its record")
 
-    if _needs_rewrite(scores, min_score, min_hook, min_safe, min_trust):
+    if _needs_rewrite(scores, min_score, min_hook, min_safe, min_trust, min_topic):
         raise ScriptQualityError(scores, critique, voiceover, revisions)
 
     return JourneyScript(

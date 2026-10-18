@@ -37,7 +37,12 @@ _ENTRIES = [
     _day(1, "human", "CONFESSION", 1,
          "\"I've been building this AI prediction platform for months without saying a word. "
          "Here's the honest record.\"",
-         "The premise. Pinned / start-here video. Pull today's picks in as proof, briefly."),
+         "The premise. Pinned / start-here video. Right after the confession, explain in one "
+         "plain sentence what Epifani actually IS, in case this is someone's first video — an "
+         "AI that predicts football matches and grades its own picks automatically, nothing "
+         "curated after the fact. Don't go deep (day 2 does that) — just enough that a "
+         "first-time viewer knows what they're looking at before today's picks show up as "
+         "proof, briefly."),
     _day(2, "proof", "CURIOSITY", 1,
          "What Epifani actually is — an AI that predicts football, graded automatically, "
          "nothing curated after the fact"),

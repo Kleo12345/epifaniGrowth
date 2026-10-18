@@ -325,7 +325,8 @@ def build_all_videos(picks: list[Pick], story_highlight: str = "") -> list[dict]
 # ── Founder's Journey video (primary content) ─────────────────────
 
 def build_journey_video(picks: list[Pick], milestone: str = "", script=None,
-                        backend: str = "local", inserts: list[dict] | None = None) -> dict:
+                        backend: str = "local", inserts: list[dict] | None = None,
+                        fam: str | None = None) -> dict:
     """
     Build ONE branded Founder's Journey video for the day.
 
@@ -354,7 +355,7 @@ def build_journey_video(picks: list[Pick], milestone: str = "", script=None,
     try:
         if backend == "local":
             from core.asset_loop import assemble_journey_video
-            out_mp4 = assemble_journey_video(script, inserts=inserts)
+            out_mp4 = assemble_journey_video(script, inserts=inserts, fam=fam)
             return {"script": script, "video_path": out_mp4}
 
         # ── legacy MPT backend ────────────────────────────────────

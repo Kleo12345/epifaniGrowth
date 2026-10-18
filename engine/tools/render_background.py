@@ -34,10 +34,26 @@ W, H, FPS = 1080, 1920, 30
 BASE = Path(__file__).resolve().parent.parent
 OUT  = BASE / "assets" / "background" / "ball_matrix.mp4"
 
-# Brand palette
+# Brand palette (default — "tech" family)
 NAVY  = (10, 14, 23)      # #0a0e17 backdrop
 CYAN  = (0, 242, 255)     # #00f2ff accent (ring + ball start)
 GREEN = (0, 255, 136)     # #00ff88 elite (ball end)
+
+# Per-content-family palettes — same motif (growing ball in an AI network ring),
+# different accent so 44 straight days don't all look identical. Keyed by
+# content_calendar.py's "fam" (tech/build/human/proof); unknown/None falls back
+# to "tech" (the original look).
+PALETTES = {
+    "tech":  {"navy": (10, 14, 23), "cyan": (0, 242, 255),  "green": (0, 255, 136),
+              "back": (14, 40, 52), "net_base": (18, 66, 84)},
+    "build": {"navy": (20, 14, 8),  "cyan": (255, 170, 40), "green": (255, 214, 110),
+              "back": (46, 30, 12), "net_base": (74, 48, 14)},
+    "human": {"navy": (20, 8, 16),  "cyan": (255, 90, 160), "green": (255, 180, 210),
+              "back": (42, 14, 30), "net_base": (70, 20, 46)},
+    "proof": {"navy": (8, 20, 14),  "cyan": (60, 255, 170), "green": (190, 255, 140),
+              "back": (14, 42, 28), "net_base": (20, 70, 46)},
+}
+DEFAULT_PALETTE = "tech"
 
 BALL_SPEED   = 9.0        # px/frame, constant (no gravity)
 FILL_TARGET  = 0.86       # ball ends near-filling the ring (leaves a clear gap)
@@ -281,8 +297,17 @@ class _Ball:
         pygame.draw.circle(screen, (255, 255, 255), (x, y), r, width=max(2, int(r / 26)))
 
 
-def render(out_path, duration: float, loudness=None, seed=None) -> Path:
-    """Render the branded growing-ball background of exactly `duration` seconds."""
+def render(out_path, duration: float, loudness=None, seed=None, palette: str | None = None) -> Path:
+    """Render the branded growing-ball background of exactly `duration` seconds.
+
+    `palette` picks the accent colors (see PALETTES) by content family; falls
+    back to DEFAULT_PALETTE on an unknown/missing key.
+    """
+    global NAVY, CYAN, GREEN, BACK_COLOR, NET_BASE
+    colors = PALETTES.get(palette, PALETTES[DEFAULT_PALETTE])
+    NAVY, CYAN, GREEN = colors["navy"], colors["cyan"], colors["green"]
+    BACK_COLOR, NET_BASE = colors["back"], colors["net_base"]
+
     if seed is not None:
         random.seed(seed)
     pygame.init()

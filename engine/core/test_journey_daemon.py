@@ -3,13 +3,25 @@ Assert-based self-check for journey_daemon.py's approval state machine.
 No network, no Gemini, no ffmpeg — everything is monkeypatched. Run with:
   python core/test_journey_daemon.py
 """
+import datetime as pydatetime
 import sys
 import types
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import journey_daemon as jd
+
+
+class _FixedNow:
+    """Stand-in for the `datetime` name journey_daemon imports — only `.now()` is used,
+    and it always returns this fixed, caller-supplied instant."""
+    def __init__(self, fixed):
+        self._fixed = fixed
+
+    def now(self, tz=None):
+        return self._fixed
 
 
 class FakeTG:
@@ -51,7 +63,13 @@ def demo():
     jd.project_day = lambda: 9  # calendar day 9: fam=build, hook=STRUGGLE, kind=journey
     fake_script = types.SimpleNamespace(day=9, caption="test caption", voiceover="hi")
     jd.generate_journey_script = lambda picks, milestone, hook_style=None, content_frame=None: fake_script
-    jd.build_journey_video = lambda picks, script: {"video_path": "/tmp/fake.mp4"}
+    fam_calls = []
+
+    def fake_build(picks, script, fam=None):
+        fam_calls.append(fam)
+        return {"video_path": "/tmp/fake.mp4"}
+
+    jd.build_journey_video = fake_build
 
     chat = {"id": fake_tg.chat_id}
 
@@ -65,6 +83,7 @@ def demo():
     assert state["kind"] == "journey", state
     assert "data pipeline" in state["milestone"], state
     assert len(fake_tg.sent_videos) == 1
+    assert fam_calls[-1] == "build", "day 9's fam should drive the background palette"
 
     jd.job_generate_daily()
     assert len(fake_tg.sent_videos) == 1, "should not regenerate same day"
@@ -120,6 +139,41 @@ def demo():
     assert record_calls and record_calls[0][0]["sample"] == 20
 
     jd.STATE_PATH.unlink(missing_ok=True)
+
+    # 7. A day with a quoted calendar topic (day 32) builds and sends the same as
+    #    any other journey day — no on-screen card logic to special-case anymore.
+    jd.project_day = lambda: 32
+    jd.generate_journey_script = lambda picks, milestone, hook_style=None, content_frame=None: fake_script
+    jd.job_generate_daily()
+    assert fam_calls[-1] == "human", "day 32's fam should drive the background palette"
+    jd.STATE_PATH.unlink(missing_ok=True)
+
+    # 8. Catch-up: a cron trigger only fires while the process is alive, so if the
+    #     PC was off through today's 08:50 slot, startup must generate it immediately
+    #     instead of silently waiting for tomorrow.
+    jd.project_day = lambda: 9
+    tz = ZoneInfo(jd.TIMEZONE)
+    before = len(fake_tg.sent_videos)
+
+    # Before the slot: nothing to catch up on yet, the normal cron will fire it.
+    jd.datetime = _FixedNow(pydatetime.datetime(2026, 10, 4, 7, 0, tzinfo=tz))
+    jd._catch_up_if_missed()
+    assert len(fake_tg.sent_videos) == before, "before today's slot — no catch-up generation"
+    jd.STATE_PATH.unlink(missing_ok=True)
+
+    # After the slot, nothing generated yet (simulates the PC having been off at 08:50):
+    # catch-up must run the job immediately.
+    jd.datetime = _FixedNow(pydatetime.datetime(2026, 10, 4, 10, 0, tzinfo=tz))
+    jd._catch_up_if_missed()
+    assert len(fake_tg.sent_videos) == before + 1, "past today's slot with nothing generated — must catch up"
+    state = jd._load_state()
+    assert state["calendar_day"] == 9 and state["status"] == "awaiting_approval", state
+
+    # Already generated today (state is no longer idle) — catch-up must not re-fire.
+    jd._catch_up_if_missed()
+    assert len(fake_tg.sent_videos) == before + 1, "already generated today — catch-up must be idempotent"
+    jd.STATE_PATH.unlink(missing_ok=True)
+
     print("OK — journey_daemon state machine behaves as expected")
 
 

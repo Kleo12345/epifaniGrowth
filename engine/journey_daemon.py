@@ -6,7 +6,10 @@ content calendar (core/content_calendar.py, 44 days).
 Every day at 08:50 Europe/Athens the daemon looks up today's calendar day
 (core.script_generator.project_day), generates that day's video straight from
 the calendar's topic/hook/family — no prompt, no waiting on a reply — and
-sends it to Telegram with Approve/Regenerate buttons. Send any text before
+sends it to Telegram with Approve/Regenerate buttons. If the PC was off or
+asleep through that slot, it catches up and generates today's video as soon
+as the daemon next starts, instead of silently waiting for tomorrow's slot.
+Send any text before
 tapping Regenerate and it's used as a rewrite note for the next take; tap
 Regenerate with no text and it just takes another pass at the same topic.
 Approve just marks the video done — posting is still manual (dashboard or
@@ -25,9 +28,11 @@ Or install as a systemd --user unit — see epifani-journey.service.
 """
 import json
 import sys
+import threading
 import time
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -104,6 +109,7 @@ def _own_chat_id() -> str:
 
 # ── Pipeline ───────────────────────────────────────────────────────
 
+
 def _report_quality_failure(state: dict, e: ScriptQualityError) -> None:
     state["status"] = "error"
     state["attempts"] += 1
@@ -163,7 +169,7 @@ def _generate_and_send(state: dict) -> None:
             _report_quality_failure(state, e)
             return
 
-    result = build_journey_video(picks, script=script)
+    result = build_journey_video(picks, script=script, fam=state.get("fam"))
     if not result.get("video_path"):
         state["status"] = "error"
         state["attempts"] += 1
@@ -171,7 +177,7 @@ def _generate_and_send(state: dict) -> None:
         tg.send_message(f"✗ Video build failed: {result.get('error')}", reply_markup=tg.RETRY_KEYBOARD)
         return
 
-    state["video_path"] = result["video_path"]
+    state["video_path"] = str(result["video_path"])
     state["feedback"] = None
     state["attempts"] += 1
     state["status"] = "awaiting_approval"
@@ -213,6 +219,24 @@ def job_generate_daily() -> None:
     state["milestone"] = milestone
     _save_state(state)
     _generate_and_send(state)
+
+
+def _catch_up_if_missed() -> None:
+    """Run on every startup: a cron trigger only fires while the process is
+    alive, so if the PC was off/asleep through today's 08:50 slot, the
+    schedule doesn't catch up on its own — it just waits for tomorrow. This
+    generates today's video immediately instead, the same job the cron would
+    have run, if that slot has already passed and nothing's been generated yet."""
+    now = datetime.now(ZoneInfo(TIMEZONE))
+    scheduled = now.replace(hour=PROMPT_HOUR, minute=PROMPT_MINUTE, second=0, microsecond=0)
+    if now < scheduled:
+        return  # today's slot hasn't arrived yet — the normal cron will fire it
+    state = _today_state()
+    if state["status"] != "idle":
+        return  # already generated (or in progress/awaiting input) today
+    print(f"  ⏰ Missed today's {PROMPT_HOUR:02d}:{PROMPT_MINUTE:02d} {TIMEZONE} slot "
+          f"(daemon was off) — catching up now.")
+    job_generate_daily()
 
 
 # ── Telegram event handling ────────────────────────────────────────
@@ -286,6 +310,7 @@ def run() -> None:
     )
     scheduler.start()
     print(f"Journey daemon started — generates daily at {PROMPT_HOUR:02d}:{PROMPT_MINUTE:02d} {TIMEZONE}")
+    threading.Thread(target=_catch_up_if_missed, daemon=True).start()
 
     offset = _load_offset()
     try:

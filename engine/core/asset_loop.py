@@ -58,6 +58,9 @@ BG_COLOR   = "0x0a0e17"   # deep navy
 EL_API_KEY  = os.getenv("ELEVENLABS_API_KEY", "").strip()
 EL_VOICE_ID = os.getenv("ELEVENLABS_VOICE_ID", "pNInz6obpgDQGcFmaJgB").strip()  # default: Adam
 EL_MODEL    = os.getenv("ELEVENLABS_MODEL", "eleven_turbo_v2_5").strip()
+# Speech tempo (ElevenLabs accepts 0.7-1.2). script_generator scales its word budget
+# by the same factor so a faster voice gets more text, not a shorter video.
+VOICE_SPEED = min(1.2, max(0.7, float(os.getenv("VOICE_SPEED", "1.15"))))
 
 # Rhubarb Lip Sync (https://github.com/DanielSWolf/rhubarb-lip-sync) — real
 # phoneme-timed mouth shapes instead of the amplitude-threshold lip-flap.
@@ -125,7 +128,8 @@ def _elevenlabs_tts(text: str, audio_path: Path, srt_path: Path) -> float:
             "text": text,
             "model_id": EL_MODEL,
             "voice_settings": {"stability": 0.28, "similarity_boost": 0.75,
-                               "style": 0.65, "use_speaker_boost": True},
+                               "style": 0.65, "use_speaker_boost": True,
+                               "speed": VOICE_SPEED},
         },
         timeout=120,
     )
@@ -155,7 +159,7 @@ def _edge_tts(text: str, audio_path: Path, srt_path: Path, voice: str) -> float:
 
     def _run() -> None:
         try:
-            communicate = edge_tts.Communicate(text, voice)
+            communicate = edge_tts.Communicate(text, voice, rate=f"{round((VOICE_SPEED - 1) * 100):+d}%")
             submaker = edge_tts.SubMaker()
             with open(audio_path, "wb") as f:
                 for chunk in communicate.stream_sync():
@@ -257,13 +261,18 @@ def _fallback_background(duration: float, out: Path) -> Path:
     return out
 
 
-def _build_base_visual(duration: float, out: Path, audio: Path | None = None) -> Path:
+def _build_base_visual(duration: float, out: Path, audio: Path | None = None,
+                       fam: str | None = None) -> Path:
     """Pick the base visual.
 
     Preferred: render a FRESH matrix+ball background of exactly this voiceover's
     length whose motion surges with the voice (audio-reactive) — so the ball pace
     matches the narration and there is no loop seam. Falls back to looping the
     pre-rendered clip, then a clip montage, then a gradient.
+
+    `fam` (content_calendar.py's content family — tech/build/human/proof) picks
+    the background's accent palette so the 44-day calendar isn't visually
+    identical every day; falls back to the default "tech" look.
     """
     if audio is not None:
         try:
@@ -272,8 +281,8 @@ def _build_base_visual(duration: float, out: Path, audio: Path | None = None) ->
                 "render_background", BASE_DIR / "tools" / "render_background.py")
             mod = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(mod)
-            print("     Background: growing-ball matrix (fills the ring by the end)")
-            mod.render(out, duration + 0.3)
+            print(f"     Background: growing-ball matrix (fills the ring by the end, palette={fam or 'tech'})")
+            mod.render(out, duration + 0.3, palette=fam)
             return out
         except Exception as e:
             print(f"  ⚠ reactive background failed ({e}) — falling back to looped clip.")
@@ -625,14 +634,23 @@ def _brand_and_caption(base: Path, audio: Path, srt: Path, duration: float,
     # Captions only if we actually have timed subtitle events
     if srt.exists() and srt.stat().st_size > 0:
         filters.append(f"subtitles={srt.name}:force_style='{_SUB_STYLE}'")
+    # Title-card geometry: one box comfortably covers both the intro (title+subtitle,
+    # fontsize 80/46) and outro (fontsize 52/64) text blocks, which all sit in the
+    # same upper-third band — a solid card behind the text instead of bare
+    # text-on-video, enabled over the same intro/outro windows as the text itself.
+    card_box = "x=60:y=265:w=960:h=230"
     filters += [
         f"drawtext=text='{WATERMARK_TEXT}':fontcolor={FONT_COLOR}:fontsize=36:"
         f"alpha=0.75:x=20:y=20",
         # Intro/outro cards sit in the upper third (above the character's head)
+        f"drawbox={card_box}:color={BG_COLOR}@0.78:t=fill:enable='between(t,0,{INTRO_DURATION})'",
+        f"drawbox={card_box}:color={FONT_COLOR}:t=4:enable='between(t,0,{INTRO_DURATION})'",
         f"drawtext=text='{intro_title}':fontcolor=white:fontsize=80:"
         f"x=(w-text_w)/2:y=(h*0.16):enable='between(t,0,{INTRO_DURATION})'",
         f"drawtext=text='{intro_subtitle}':fontcolor={FONT_COLOR}:fontsize=46:"
         f"x=(w-text_w)/2:y=(h*0.16+95):enable='between(t,0,{INTRO_DURATION})'",
+        f"drawbox={card_box}:color={BG_COLOR}@0.78:t=fill:enable='gte(t,{duration - OUTRO_DURATION:.2f})'",
+        f"drawbox={card_box}:color={FONT_COLOR}:t=4:enable='gte(t,{duration - OUTRO_DURATION:.2f})'",
         f"drawtext=text='Get all picks free':fontcolor=white:fontsize=52:"
         f"x=(w-text_w)/2:y=(h*0.16):enable='gte(t,{duration - OUTRO_DURATION:.2f})'",
         f"drawtext=text='epifanii.com':fontcolor={FONT_COLOR}:fontsize=64:"
@@ -694,11 +712,14 @@ def _brand_and_caption(base: Path, audio: Path, srt: Path, duration: float,
 
 
 def assemble_journey_video(script, out_path: Path | None = None,
-                           voice: str = VOICE, inserts: list[dict] | None = None) -> Path:
+                           voice: str = VOICE, inserts: list[dict] | None = None,
+                           fam: str | None = None) -> Path:
     """Build a branded journey video locally from a JourneyScript. Returns the mp4 path.
 
     `inserts` is an optional list of visual-insert specs (code cards / screenshots
     shown in the upper-right while he talks about them) — see core.visuals.
+    `fam` picks the background's accent palette by content family — see
+    tools/render_background.py's PALETTES.
     """
     day = getattr(script, "day", 0)
     out_path = out_path or (OUTPUT_DIR / f"journey_day{day}_branded.mp4")
@@ -722,7 +743,7 @@ def assemble_journey_video(script, out_path: Path | None = None,
 
         montage = work / "montage.mp4"
         print("  🎞️  Assembling visuals...")
-        _build_base_visual(duration, montage, audio=audio)
+        _build_base_visual(duration, montage, audio=audio, fam=fam)
 
         char_layer = None
         poses = character_assets()
