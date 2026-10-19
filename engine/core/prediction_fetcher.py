@@ -86,7 +86,8 @@ class Pick:
     @property
     def cta_url(self) -> str:
         source = os.getenv("UTM_SOURCE", "twitter")
-        return f"epifanii.com/?ref={source}"
+        # utm_* (not ?ref=) so PostHog records it as the visitor's first-touch source
+        return f"epifanii.com/?utm_source={source}&utm_medium=social"
 
 
 def _tier(probability: float) -> tuple[str, str]:
