@@ -268,7 +268,11 @@ def fetch_recent_winners() -> list[dict]:
         resp = requests.get(url, timeout=10)
         resp.raise_for_status()
         data = resp.json()
-        return data if isinstance(data, list) else []
     except requests.RequestException:
         return []
+    if not isinstance(data, list):
+        return []
+    # Same Core3-only rule as fetch_picks: never showcase a market we don't promote.
+    norm = lambda m: "DNB" if m == "Draw No Bet" else m
+    return [w for w in data if norm(w.get("market", "")) in VIDEO_MARKETS]
 
