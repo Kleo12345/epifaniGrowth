@@ -480,8 +480,11 @@ def _critic_punish_block() -> str:
 
 
 def _ensure_comment_gate(voiceover: str, cta_mode: str, offer: str) -> str:
-    """In comment mode the keyword IS the mechanic — if a rewrite/condense pass
-    dropped it, append a natural gate line so the funnel never silently breaks."""
+    """Final pass on every voiceover. Strips markdown emphasis (*word*, `word`) the
+    writer sometimes adds — it would be burned into the subtitles. In comment mode the
+    keyword IS the mechanic — if a rewrite/condense pass dropped it, append a natural
+    gate line so the funnel never silently breaks."""
+    voiceover = re.sub(r"[*`]", "", voiceover)
     if cta_mode != "comment" or COMMENT_GATE_WORD.lower() in voiceover.lower():
         return voiceover
     print(f"  ⚠ Comment-gate keyword '{COMMENT_GATE_WORD}' missing after revisions — appending gate line.")
@@ -999,6 +1002,11 @@ def platform_captions(script: JourneyScript, cta_mode: str | None = None) -> dic
                       "hashtags": str(v.get("hashtags", script.hashtags)).strip()}
         else:
             out[p] = dict(base)
+    if _resolve_cta_mode(cta_mode) == "comment":
+        # The video asks viewers to comment the keyword; on TikTok/IG the caption must too.
+        for p in ("tiktok", "instagram"):
+            if COMMENT_GATE_WORD.lower() not in out[p]["caption"].lower():
+                out[p]["caption"] += f"\nComment {COMMENT_GATE_WORD} and I'll send you the model's output."
     return {p: {k: _strip_emoji(v) for k, v in c.items()} for p, c in out.items()}
 
 
