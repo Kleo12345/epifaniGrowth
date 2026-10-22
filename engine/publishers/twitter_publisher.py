@@ -106,3 +106,17 @@ def post_all_threads(pairs: list[dict], dry_run: bool = False) -> list[dict]:
             print(f"  ✗ Post failed for {thread.pick.match}: {e}")
             results.append({"match": thread.pick.match, "success": False, "error": str(e)})
     return results
+
+
+def post_video(video_path: Path, caption: str, hashtags: str = "") -> str:
+    """Upload a video (chunked v1.1 media upload) and post it as a single tweet.
+
+    Hashtags are appended only while the tweet stays within 280 chars. Returns the tweet id.
+    """
+    v2_client, v1_api = _client()
+    text = caption.strip()[:280]
+    if hashtags and len(text) + 2 + len(hashtags) <= 280:
+        text = f"{text}\n\n{hashtags}"
+    media = v1_api.media_upload(str(video_path), chunked=True, media_category="tweet_video")
+    resp = v2_client.create_tweet(text=text, media_ids=[media.media_id])
+    return str(resp.data["id"])

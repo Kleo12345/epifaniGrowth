@@ -14,7 +14,8 @@ load_dotenv()
 
 PORT = 8080
 REDIRECT_URI = f"http://localhost:{PORT}"
-SCOPES = ["https://www.googleapis.com/auth/youtube.upload"]
+SCOPES = ["https://www.googleapis.com/auth/youtube.upload",
+          "https://www.googleapis.com/auth/youtube.readonly"]  # readonly: nightly metrics
 
 authorization_code = None
 

@@ -12,12 +12,10 @@ load_dotenv()
 
 
 def is_configured() -> bool:
-    """Check if YouTube credentials are configured in .env."""
-    return bool(
-        os.getenv("YOUTUBE_CLIENT_ID")
-        and os.getenv("YOUTUBE_CLIENT_SECRET")
-        and os.getenv("YOUTUBE_REFRESH_TOKEN")
-    )
+    """Check if YouTube credentials are configured in .env (the .env.example
+    `your_..._here` placeholders don't count)."""
+    keys = ("YOUTUBE_CLIENT_ID", "YOUTUBE_CLIENT_SECRET", "YOUTUBE_REFRESH_TOKEN")
+    return all(os.getenv(k) and not os.getenv(k).startswith("your_") for k in keys)
 
 
 def _get_access_token() -> str:

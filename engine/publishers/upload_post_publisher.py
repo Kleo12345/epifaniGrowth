@@ -14,6 +14,72 @@ load_dotenv()
 # but we map them to the official APIs.
 PLATFORMS = ["tiktok", "instagram"]
 
+ENV_PATH = Path(__file__).resolve().parents[1] / ".env"
+# Graph API versions are retired ~2 years after release; bump when Meta deprecates this one.
+IG_GRAPH = "https://graph.instagram.com/v24.0"
+
+
+def save_env_value(key: str, value: str) -> None:
+    """Rewrite (or append) KEY=value in engine/.env and the live process env —
+    used to persist rotated OAuth tokens so they survive a daemon restart."""
+    lines = ENV_PATH.read_text(encoding="utf-8").splitlines() if ENV_PATH.exists() else []
+    for i, line in enumerate(lines):
+        if line.startswith(f"{key}="):
+            lines[i] = f"{key}={value}"
+            break
+    else:
+        lines.append(f"{key}={value}")
+    ENV_PATH.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    os.environ[key] = value
+
+
+def refresh_instagram_token() -> int:
+    """Extend the long-lived Instagram token by another 60 days (call daily).
+
+    Only works while the current token is still valid and at least 24h old — once it
+    expires you must generate a new one in the Meta developer dashboard.
+    Returns the new token's lifetime in days."""
+    resp = requests.get(
+        "https://graph.instagram.com/refresh_access_token",
+        params={"grant_type": "ig_refresh_token", "access_token": os.environ["INSTAGRAM_ACCESS_TOKEN"]},
+        timeout=30,
+    )
+    resp.raise_for_status()
+    data = resp.json()
+    save_env_value("INSTAGRAM_ACCESS_TOKEN", data["access_token"])
+    return int(data.get("expires_in", 0)) // 86400
+
+
+def tiktok_access_token() -> str:
+    """TikTok access tokens live 24h. With TIKTOK_CLIENT_KEY/SECRET/REFRESH_TOKEN set
+    (tools/tiktok_auth.py writes them), mint a fresh one each call and persist the
+    rotated refresh token; otherwise fall back to a static TIKTOK_ACCESS_TOKEN."""
+    key, secret = os.getenv("TIKTOK_CLIENT_KEY", ""), os.getenv("TIKTOK_CLIENT_SECRET", "")
+    refresh = os.getenv("TIKTOK_REFRESH_TOKEN", "")
+    if not (key and secret and refresh):
+        return os.getenv("TIKTOK_ACCESS_TOKEN", "")
+    resp = requests.post(
+        "https://open.tiktokapis.com/v2/oauth/token/",
+        data={"client_key": key, "client_secret": secret,
+              "grant_type": "refresh_token", "refresh_token": refresh},
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+        timeout=30,
+    )
+    resp.raise_for_status()
+    data = resp.json()
+    if "access_token" not in data:
+        raise RuntimeError(f"TikTok token refresh failed: {data}")
+    if data.get("refresh_token") and data["refresh_token"] != refresh:
+        save_env_value("TIKTOK_REFRESH_TOKEN", data["refresh_token"])
+    return data["access_token"]
+
+
+def tiktok_configured() -> bool:
+    if os.getenv("TIKTOK_REFRESH_TOKEN"):
+        return True
+    t = os.getenv("TIKTOK_ACCESS_TOKEN", "").lower()
+    return bool(t) and t not in ("manual", "local", "telegram")
+
 
 def is_configured() -> bool:
     """Check if either Instagram or TikTok credentials are configured."""
@@ -76,7 +142,7 @@ def _post_instagram(video_path: Path, caption: str) -> str:
         "share_to_feed": "true",
     }
     resp = requests.post(
-        "https://graph.instagram.com/v21.0/me/media",
+        f"{IG_GRAPH}/me/media",
         headers=headers, data=payload, timeout=30
     )
     resp.raise_for_status()
@@ -90,7 +156,7 @@ def _post_instagram(video_path: Path, caption: str) -> str:
     for _ in range(30):
         time.sleep(10)
         status_resp = requests.get(
-            f"https://graph.instagram.com/v21.0/{container_id}",
+            f"{IG_GRAPH}/{container_id}",
             headers=headers,
             params={"fields": "status_code"},
             timeout=20
@@ -108,7 +174,7 @@ def _post_instagram(video_path: Path, caption: str) -> str:
 
     # Step 3: Publish the Reel
     publish_resp = requests.post(
-        "https://graph.instagram.com/v21.0/me/media_publish",
+        f"{IG_GRAPH}/me/media_publish",
         headers=headers,
         data={"creation_id": container_id},
         timeout=30
@@ -121,10 +187,10 @@ def _post_instagram(video_path: Path, caption: str) -> str:
 
 def _post_tiktok(video_path: Path, caption: str) -> str:
     """Upload video to TikTok via official Content Posting API or note that it is saved locally for manual upload."""
-    access_token = os.getenv("TIKTOK_ACCESS_TOKEN")
+    access_token = tiktok_access_token()
 
     if not access_token:
-        raise ValueError("TikTok credentials missing. Need TIKTOK_ACCESS_TOKEN in .env")
+        raise ValueError("TikTok credentials missing. Run tools/tiktok_auth.py (or set TIKTOK_ACCESS_TOKEN)")
 
     if access_token.lower() in ("manual", "local", "telegram"):
         print(f"\n📢  [MANUAL TIKTOK POST] Video saved locally:")
@@ -135,19 +201,18 @@ def _post_tiktok(video_path: Path, caption: str) -> str:
     video_size = os.path.getsize(video_path)
 
     # Step 1: Initialize Upload
-    init_url = "https://open.tiktokapis.com/v2/post/publish/video/init/"
+    # "inbox" (default): the video lands in your TikTok app inbox as a draft — tap Post
+    # and paste the caption. Works before TikTok audits the app. "direct" posts publicly
+    # straight away, but TikTok only allows that once the app has passed its audit
+    # (unaudited apps can direct-post only as private).
+    direct = os.getenv("TIKTOK_POST_MODE", "inbox").lower() == "direct"
+    init_url = ("https://open.tiktokapis.com/v2/post/publish/video/init/" if direct
+                else "https://open.tiktokapis.com/v2/post/publish/inbox/video/init/")
     headers = {
         "Authorization": f"Bearer {access_token}",
         "Content-Type": "application/json; charset=UTF-8"
     }
     payload = {
-        "post_info": {
-            "title": caption[:150],  # TikTok title limit is 150 characters
-            "privacy_level": "PUBLIC_TO_EVERYONE",
-            "disable_duet": False,
-            "disable_stitch": False,
-            "disable_comment": False
-        },
         "source_info": {
             "source": "FILE_UPLOAD",
             "video_size": video_size,
@@ -155,6 +220,14 @@ def _post_tiktok(video_path: Path, caption: str) -> str:
             "total_chunk_count": 1
         }
     }
+    if direct:
+        payload["post_info"] = {
+            "title": caption[:2200],  # TikTok caption limit is 2200 characters
+            "privacy_level": "PUBLIC_TO_EVERYONE",
+            "disable_duet": False,
+            "disable_stitch": False,
+            "disable_comment": False
+        }
     resp = requests.post(init_url, json=payload, headers=headers, timeout=30)
     resp.raise_for_status()
     res_data = resp.json()
@@ -195,7 +268,7 @@ def post_video(
     configured_platforms = []
     if "instagram" in platforms and os.getenv("INSTAGRAM_ACCESS_TOKEN"):
         configured_platforms.append("instagram")
-    if "tiktok" in platforms and os.getenv("TIKTOK_ACCESS_TOKEN"):
+    if "tiktok" in platforms and tiktok_configured():
         configured_platforms.append("tiktok")
 
     if not configured_platforms:

@@ -37,6 +37,46 @@ def _init():
                 result         TEXT
             )
         """)
+        # Founder's Journey videos posted to socials — one row per platform per video.
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS social_posts (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                posted_at   TEXT    DEFAULT (datetime('now')),
+                date        TEXT    NOT NULL,
+                day         INTEGER,
+                kind        TEXT,
+                fam         TEXT,
+                hook        TEXT,
+                platform    TEXT    NOT NULL,
+                post_id     TEXT,
+                url         TEXT,
+                caption     TEXT,
+                voiceover   TEXT
+            )
+        """)
+        # Daily snapshots, so the nightly report can show growth since yesterday.
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS post_metrics (
+                snapshot_date TEXT NOT NULL,
+                platform      TEXT NOT NULL,
+                post_id       TEXT NOT NULL,
+                views         INTEGER,
+                likes         INTEGER,
+                comments      INTEGER,
+                shares        INTEGER,
+                saves         INTEGER,
+                extra         TEXT,
+                PRIMARY KEY (snapshot_date, platform, post_id)
+            )
+        """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS account_metrics (
+                snapshot_date TEXT NOT NULL,
+                platform      TEXT NOT NULL,
+                followers     INTEGER,
+                PRIMARY KEY (snapshot_date, platform)
+            )
+        """)
 
 
 def log_post(pick, platform: str, post_id: str = None):
@@ -138,3 +178,69 @@ def total_stats() -> dict:
             FROM posts
         """).fetchone()
     return dict(row)
+
+
+# ── Social posts + metrics (Founder's Journey auto-posting) ─────────
+
+def log_social_post(platform: str, post_id: str | None, url: str | None, meta: dict) -> None:
+    """meta: day, kind, fam, hook, caption, voiceover (all optional)."""
+    _init()
+    with _conn() as conn:
+        conn.execute("""
+            INSERT INTO social_posts (date, day, kind, fam, hook, platform, post_id, url, caption, voiceover)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (date.today().isoformat(), meta.get("day"), meta.get("kind"), meta.get("fam"),
+              meta.get("hook"), platform, post_id, url, meta.get("caption"), meta.get("voiceover")))
+
+
+def social_posts_since(days: int) -> list[dict]:
+    _init()
+    with _conn() as conn:
+        rows = conn.execute(
+            "SELECT * FROM social_posts WHERE date >= date('now', ?) ORDER BY date, platform",
+            (f"-{days} days",),
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def update_social_post(row_id: int, post_id: str, url: str | None) -> None:
+    """Fill in the real id once known (TikTok inbox drafts get one only after you tap Post)."""
+    _init()
+    with _conn() as conn:
+        conn.execute("UPDATE social_posts SET post_id = ?, url = ? WHERE id = ?", (post_id, url, row_id))
+
+
+def save_post_metrics(snapshot_date: str, platform: str, post_id: str, m: dict) -> None:
+    _init()
+    with _conn() as conn:
+        conn.execute("""
+            INSERT OR REPLACE INTO post_metrics
+                (snapshot_date, platform, post_id, views, likes, comments, shares, saves, extra)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (snapshot_date, platform, post_id, m.get("views"), m.get("likes"), m.get("comments"),
+              m.get("shares"), m.get("saves"), m.get("extra")))
+
+
+def save_account_metrics(snapshot_date: str, platform: str, followers: int | None) -> None:
+    _init()
+    with _conn() as conn:
+        conn.execute("INSERT OR REPLACE INTO account_metrics VALUES (?, ?, ?)",
+                     (snapshot_date, platform, followers))
+
+
+def post_metrics_on(snapshot_date: str) -> dict:
+    """{(platform, post_id): metrics row} for one snapshot day."""
+    _init()
+    with _conn() as conn:
+        rows = conn.execute("SELECT * FROM post_metrics WHERE snapshot_date = ?",
+                            (snapshot_date,)).fetchall()
+    return {(r["platform"], r["post_id"]): dict(r) for r in rows}
+
+
+def followers_on(snapshot_date: str) -> dict:
+    """{platform: followers} for one snapshot day."""
+    _init()
+    with _conn() as conn:
+        rows = conn.execute("SELECT platform, followers FROM account_metrics WHERE snapshot_date = ?",
+                            (snapshot_date,)).fetchall()
+    return {r["platform"]: r["followers"] for r in rows}

@@ -12,8 +12,11 @@ as the daemon next starts, instead of silently waiting for tomorrow's slot.
 Send any text before
 tapping Regenerate and it's used as a rewrite note for the next take; tap
 Regenerate with no text and it just takes another pass at the same topic.
-Approve just marks the video done — posting is still manual (dashboard or
-`main.py --post-social`), by design. Once day 45 arrives (the calendar is
+Approve posts the video to every connected platform (core/social_publish.py:
+Instagram, TikTok inbox draft, YouTube Shorts, X) and reports the links; any
+platform that fails gets a "Retry failed platforms" button. Every night at
+22:30 a growth report (core/daily_report.py — metrics + Claude's analysis) is
+sent to the same chat. Once day 45 arrives (the calendar is
 exhausted) it falls back to asking what you built, same as before.
 
 Run with:
@@ -21,12 +24,14 @@ Run with:
   python journey_daemon.py
 Or install as a systemd --user unit — see epifani-journey.service.
 
-# ponytail: no crash-recovery for a restart mid-"generating" — if the
-# process dies while a video is being built, journey_state.json is stuck
-# on status="generating" until you edit it back to "awaiting_milestone"
-# (or delete the file) and restart. Add real recovery if that ever bites.
+Crash recovery: if generation dies (e.g. the PC woke with no network yet), the
+day goes back to "idle" and a 15-minute retry job picks it up again — up to
+MAX_CRASH_RETRIES times, then it parks in "error" with a Regenerate button so a
+persistent fault can't burn ElevenLabs credits all day. A restart that finds a
+stale "generating" state treats it the same way.
 """
 import json
+import os
 import sys
 import threading
 import time
@@ -42,6 +47,8 @@ load_dotenv()
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from core import telegram_bot as tg
+from core.daily_report import daily_report
+from core.social_publish import configured_platforms, publish
 from core.content_calendar import calendar_entry
 from core.prediction_fetcher import fetch_picks, fetch_performance, fetch_recent_winners
 from core.script_generator import (
@@ -50,12 +57,15 @@ from core.script_generator import (
     generate_journey_script,
     generate_track_record_script,
     hook_style_for_calendar,
+    platform_captions,
     project_day,
 )
 from core.video_builder import build_journey_video, stop_mpt
+from publishers.upload_post_publisher import refresh_instagram_token
 
 TIMEZONE = "Europe/Athens"
 PROMPT_HOUR, PROMPT_MINUTE = 8, 50
+REPORT_HOUR, REPORT_MINUTE = 22, 30
 
 STATE_PATH = Path(__file__).resolve().parent / "assets" / "output" / "journey_state.json"
 OFFSET_PATH = Path(__file__).resolve().parent / "assets" / "output" / "telegram_offset.txt"
@@ -63,7 +73,9 @@ OFFSET_PATH = Path(__file__).resolve().parent / "assets" / "output" / "telegram_
 
 # ── State ──────────────────────────────────────────────────────────
 # journey_state.json: {date, status, milestone, feedback, video_path,
-#                       video_message_id, attempts, calendar_day, fam, hook, kind}
+#                       video_message_id, attempts, calendar_day, fam, hook, kind,
+#                       script: {day, milestone, voiceover, caption, hashtags},
+#                       posted: {platform: url|None}}
 # status: idle | awaiting_milestone | generating | awaiting_approval | error | approved
 # kind: "journey" (calendar topic / freeform milestone) | "record" (weekly track-record
 #       check-in, built from real performance data instead of a topic)
@@ -121,7 +133,34 @@ def _report_quality_failure(state: dict, e: ScriptQualityError) -> None:
     )
 
 
+MAX_CRASH_RETRIES = 3
+
+
+def _recover_from_crash(state: dict, err: object) -> None:
+    """Generation died mid-way: back to idle so the 15-min retry job tries again,
+    or park in error after MAX_CRASH_RETRIES so a persistent fault stops retrying."""
+    state["crashes"] = state.get("crashes", 0) + 1
+    gave_up = state["crashes"] >= MAX_CRASH_RETRIES
+    state["status"] = "error" if gave_up else "idle"
+    _save_state(state)
+    print(f"  ⚠ generation crashed ({err}) — "
+          + ("giving up, waiting for Regenerate" if gave_up else "will retry in ≤15 min"))
+    if gave_up:
+        try:
+            tg.send_message(f"✗ Today's video failed {state['crashes']} times ({err}). "
+                            "Tap Regenerate to try again.", reply_markup=tg.RETRY_KEYBOARD)
+        except Exception:
+            pass  # still offline — the state is saved, Regenerate works once it's back
+
+
 def _generate_and_send(state: dict) -> None:
+    try:
+        _build_and_send(state)
+    except Exception as e:
+        _recover_from_crash(state, e)
+
+
+def _build_and_send(state: dict) -> None:
     state["status"] = "generating"
     _save_state(state)
 
@@ -178,15 +217,28 @@ def _generate_and_send(state: dict) -> None:
         return
 
     state["video_path"] = str(result["video_path"])
+    state["script"] = {k: getattr(script, k, "") for k in
+                       ("day", "milestone", "voiceover", "caption", "hashtags")}
+    state["captions"] = platform_captions(script)
     state["feedback"] = None
     state["attempts"] += 1
     state["status"] = "awaiting_approval"
     _save_state(state)
 
     caption = f"Day {script.day} — attempt {state['attempts']}\n\n{script.caption}"
+    tg.send_message(_caption_preview(state["captions"]))
     msg = tg.send_video(result["video_path"], caption=caption, reply_markup=tg.APPROVE_KEYBOARD)
     state["video_message_id"] = msg["message_id"]
     _save_state(state)
+
+
+def _caption_preview(captions: dict) -> str:
+    """What Approve will post, per connected platform — reviewed before it goes live."""
+    lines = ["📝 Captions that will be posted on Approve:"]
+    for p in configured_platforms():
+        c = captions.get(p) or {}
+        lines.append(f"\n— {p.upper()} —\n{c.get('caption', '')}\n{c.get('hashtags', '')}")
+    return "\n".join(lines)
 
 
 def job_generate_daily() -> None:
@@ -234,9 +286,58 @@ def _catch_up_if_missed() -> None:
     state = _today_state()
     if state["status"] != "idle":
         return  # already generated (or in progress/awaiting input) today
-    print(f"  ⏰ Missed today's {PROMPT_HOUR:02d}:{PROMPT_MINUTE:02d} {TIMEZONE} slot "
-          f"(daemon was off) — catching up now.")
+    print(f"  ⏰ Today's {PROMPT_HOUR:02d}:{PROMPT_MINUTE:02d} {TIMEZONE} video isn't made yet "
+          f"(missed slot or earlier crash) — catching up now.")
     job_generate_daily()
+
+
+# ── Posting + nightly report ───────────────────────────────────────
+
+def _publish(state: dict) -> None:
+    """Post the approved video to every connected platform not already posted to."""
+    posted = state.setdefault("posted", {})
+    todo = [p for p in configured_platforms() if p not in posted]
+    if not todo:
+        tg.send_message(f"✅ Approved — {state['video_path']}\n"
+                        + ("Already posted everywhere." if posted else
+                           "No social accounts connected yet — post it yourself."))
+        return
+    tg.send_message(f"📤 Posting to {', '.join(todo)}...")
+    meta = {k: state.get(k) for k in ("kind", "fam", "hook")}
+    results = publish(state["video_path"], state.get("script") or {}, meta, todo,
+                      captions=state.get("captions"))
+
+    lines, failed = [], []
+    for p, r in results.items():
+        if r["ok"]:
+            posted[p] = r["url"]
+            if p == "tiktok":
+                lines.append(f"✅ tiktok: draft is in your TikTok inbox — open the app, "
+                             f"paste this caption, tap Post:\n{r['caption']}")
+            else:
+                lines.append(f"✅ {p}: {r['url'] or 'posted'}")
+        else:
+            failed.append(p)
+            lines.append(f"✗ {p}: {r['error']}")
+    _save_state(state)
+    tg.send_message("\n\n".join(lines),
+                    reply_markup=tg.RETRY_POST_KEYBOARD if failed else None)
+
+
+def job_nightly_report() -> None:
+    """22:30 Athens — keep the Instagram token alive, then send the growth report."""
+    if os.getenv("INSTAGRAM_ACCESS_TOKEN"):
+        try:
+            refresh_instagram_token()
+        except Exception as e:
+            tg.send_message(f"⚠️ Instagram token refresh failed ({e}). If it has expired, "
+                            "generate a new one in the Meta developer dashboard and put it in "
+                            "INSTAGRAM_ACCESS_TOKEN in engine/.env.")
+    try:
+        tg.send_message(daily_report())
+    except Exception as e:
+        print(f"  ⚠ nightly report failed: {e}")
+        tg.send_message(f"⚠️ Tonight's growth report failed: {e}")
 
 
 # ── Telegram event handling ────────────────────────────────────────
@@ -249,15 +350,19 @@ def handle_update(update: dict) -> None:
         tg.answer_callback(cq["id"])
 
         state = _today_state()
+        data = cq.get("data")
+        if data == "retry_post" and state["status"] == "approved":
+            tg.edit_reply_markup(cq["message"]["message_id"])
+            _publish(state)
+            return
         if state["status"] not in ("awaiting_approval", "error"):
             return
 
-        data = cq.get("data")
         if data == "approve":
             state["status"] = "approved"
             _save_state(state)
             tg.edit_reply_markup(cq["message"]["message_id"])
-            tg.send_message(f"✅ Approved — {state['video_path']}\nPost it yourself when ready.")
+            _publish(state)
         elif data == "regenerate":
             tg.edit_reply_markup(cq["message"]["message_id"])
             _generate_and_send(state)
@@ -307,9 +412,24 @@ def run() -> None:
         job_generate_daily,
         CronTrigger(hour=PROMPT_HOUR, minute=PROMPT_MINUTE, timezone=TIMEZONE),
         id="generate_daily",
+        # Default grace is 1s, so a PC asleep at 08:50 silently skipped the day. None =
+        # run it whenever the machine wakes (the job itself no-ops if today's already done).
+        misfire_grace_time=None,
     )
+    scheduler.add_job(
+        job_nightly_report,
+        CronTrigger(hour=REPORT_HOUR, minute=REPORT_MINUTE, timezone=TIMEZONE),
+        id="nightly_report",
+        misfire_grace_time=None,
+    )
+    # Retry net: re-runs the (idempotent) catch-up so a day that crashed back to idle,
+    # or a wake from sleep the cron missed, gets generated without a restart.
+    scheduler.add_job(_catch_up_if_missed, "interval", minutes=15, id="retry_catch_up")
     scheduler.start()
     print(f"Journey daemon started — generates daily at {PROMPT_HOUR:02d}:{PROMPT_MINUTE:02d} {TIMEZONE}")
+    state = _load_state()
+    if state.get("status") == "generating":  # died mid-build last run
+        _recover_from_crash(state, "daemon restarted mid-generation")
     threading.Thread(target=_catch_up_if_missed, daemon=True).start()
 
     offset = _load_offset()

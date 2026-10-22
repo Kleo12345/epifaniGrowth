@@ -27,6 +27,7 @@ class _FixedNow:
 class FakeTG:
     APPROVE_KEYBOARD = {"inline_keyboard": [["approve", "regenerate"]]}
     RETRY_KEYBOARD = {"inline_keyboard": [["regenerate"]]}
+    RETRY_POST_KEYBOARD = {"inline_keyboard": [["retry_post"]]}
 
     def __init__(self, chat_id="12345"):
         self.chat_id = chat_id
@@ -39,6 +40,7 @@ class FakeTG:
 
     def send_message(self, text, reply_markup=None):
         self.sent_messages.append(text)
+        self.last_markup = reply_markup
         return {"message_id": 1}
 
     def send_video(self, path, caption, reply_markup=None):
@@ -60,8 +62,11 @@ def demo():
     jd.STATE_PATH.unlink(missing_ok=True)
 
     jd.fetch_picks = lambda **kw: []
+    jd.platform_captions = lambda script: {"instagram": {"caption": "ig cap", "hashtags": "#ai"}}
+    jd.configured_platforms = lambda: ["instagram"]
     jd.project_day = lambda: 9  # calendar day 9: fam=build, hook=STRUGGLE, kind=journey
-    fake_script = types.SimpleNamespace(day=9, caption="test caption", voiceover="hi")
+    fake_script = types.SimpleNamespace(day=9, milestone="m", caption="test caption",
+                                        hashtags="#ai", voiceover="hi")
     jd.generate_journey_script = lambda picks, milestone, hook_style=None, content_frame=None: fake_script
     fam_calls = []
 
@@ -104,7 +109,21 @@ def demo():
     assert len(fake_tg.sent_videos) == 2
     assert state["feedback"] is None, state
 
-    # 4. Approve marks the day done.
+    # 4. Approve marks the day done and posts to every connected platform; a failed
+    #    platform gets a retry button, and retry only re-posts the ones that failed.
+    assert state["script"]["caption"] == "test caption", "script must be saved for posting"
+    publish_calls = []
+    x_works = {"ok": False}
+
+    def fake_publish(video_path, script, meta, platforms, captions=None):
+        assert captions and "instagram" in captions, "must post the previewed captions"
+        publish_calls.append(list(platforms))
+        return {p: ({"ok": True, "url": f"https://{p}/1", "caption": "c", "error": None}
+                    if p != "x" or x_works["ok"] else
+                    {"ok": False, "url": None, "caption": "c", "error": "boom"}) for p in platforms}
+
+    jd.publish = fake_publish
+    jd.configured_platforms = lambda: ["instagram", "x"]
     jd.handle_update({
         "callback_query": {
             "id": "2", "data": "approve",
@@ -113,6 +132,17 @@ def demo():
     })
     state = jd._load_state()
     assert state["status"] == "approved", state
+    assert publish_calls == [["instagram", "x"]], publish_calls
+    assert state["posted"] == {"instagram": "https://instagram/1"}, state
+    assert fake_tg.last_markup == FakeTG.RETRY_POST_KEYBOARD, "failed platform → retry button"
+
+    x_works["ok"] = True
+    jd.handle_update({"callback_query": {"id": "3", "data": "retry_post",
+                                         "message": {"message_id": 100, "chat": chat}}})
+    state = jd._load_state()
+    assert publish_calls[-1] == ["x"], "retry must only re-post the failed platform"
+    assert set(state["posted"]) == {"instagram", "x"}, state
+    assert fake_tg.last_markup is None
 
     # 5. Updates from a different chat id are ignored (single-user gate).
     jd.handle_update({"message": {"chat": {"id": "999"}, "text": "nope"}})
@@ -172,6 +202,24 @@ def demo():
     # Already generated today (state is no longer idle) — catch-up must not re-fire.
     jd._catch_up_if_missed()
     assert len(fake_tg.sent_videos) == before + 1, "already generated today — catch-up must be idempotent"
+    jd.STATE_PATH.unlink(missing_ok=True)
+
+    # 9. Crash recovery: a build that throws (e.g. no network after wake) must not
+    #    leave the day stuck on "generating" — it goes back to idle for the retry job,
+    #    and parks in "error" after MAX_CRASH_RETRIES so it stops burning credits.
+    def boom(picks, script, fam=None):
+        raise ConnectionError("no network")
+
+    jd.build_journey_video = boom
+    for attempt in range(1, jd.MAX_CRASH_RETRIES):
+        jd._catch_up_if_missed()
+        state = jd._load_state()
+        assert state["status"] == "idle" and state["crashes"] == attempt, state
+    jd._catch_up_if_missed()
+    state = jd._load_state()
+    assert state["status"] == "error", "gives up after MAX_CRASH_RETRIES"
+    jd._catch_up_if_missed()
+    assert jd._load_state()["crashes"] == jd.MAX_CRASH_RETRIES, "no retries once parked in error"
     jd.STATE_PATH.unlink(missing_ok=True)
 
     print("OK — journey_daemon state machine behaves as expected")

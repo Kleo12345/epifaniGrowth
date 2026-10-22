@@ -21,6 +21,9 @@ APPROVE_KEYBOARD = {
 RETRY_KEYBOARD = {
     "inline_keyboard": [[{"text": "🔁 Regenerate", "callback_data": "regenerate"}]]
 }
+RETRY_POST_KEYBOARD = {
+    "inline_keyboard": [[{"text": "📤 Retry failed platforms", "callback_data": "retry_post"}]]
+}
 
 
 def is_configured() -> bool:
@@ -43,11 +46,15 @@ def _url(method: str) -> str:
 
 
 def send_message(text: str, reply_markup: dict | None = None) -> dict:
-    payload = {"chat_id": own_chat_id(), "text": text}
-    if reply_markup:
-        payload["reply_markup"] = reply_markup
-    r = requests.post(_url("sendMessage"), json=payload, timeout=30)
-    r.raise_for_status()
+    """Long texts are split into 4000-char messages (Telegram's limit is 4096);
+    the keyboard goes on the last one."""
+    chunks = [text[i:i + 4000] for i in range(0, len(text), 4000)] or [""]
+    for i, chunk in enumerate(chunks):
+        payload = {"chat_id": own_chat_id(), "text": chunk}
+        if reply_markup and i == len(chunks) - 1:
+            payload["reply_markup"] = reply_markup
+        r = requests.post(_url("sendMessage"), json=payload, timeout=30)
+        r.raise_for_status()
     return r.json()["result"]
 
 
