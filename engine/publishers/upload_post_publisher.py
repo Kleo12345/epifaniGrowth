@@ -88,37 +88,28 @@ def is_configured() -> bool:
     return has_instagram or has_tiktok
 
 
-def _upload_to_temp_host(video_path: Path) -> str:
-    """
-    Uploads the video temporarily to a free file sharing service
-    so Meta's API can fetch it. Once published, the file is no longer needed.
-    """
-    # Attempt 1: Catbox.moe (Free, fast, no limits)
-    try:
-        url = "https://catbox.moe/user/api.php"
-        with open(video_path, "rb") as f:
-            files = {"fileToUpload": f}
-            data = {"reqtype": "fileupload"}
-            resp = requests.post(url, files=files, data=data, timeout=90)
-            if resp.status_code == 200 and resp.text.startswith("http"):
-                return resp.text.strip()
-    except Exception as e:
-        print(f"  ⚠  Catbox upload failed: {e}. Trying fallback...")
-
-    # Attempt 2: File.io (Free, expires in 1 day, automatically deleted after 1 download)
-    try:
-        url = "https://file.io"
-        with open(video_path, "rb") as f:
-            files = {"file": f}
-            resp = requests.post(url, files=files, timeout=90)
-            if resp.status_code == 200:
-                result = resp.json()
-                if result.get("success") and result.get("link"):
-                    return result.get("link")
-    except Exception as e:
-        print(f"  ⚠  File.io upload failed: {e}")
-
-    raise RuntimeError("Failed to host video on temporary storage for Meta to fetch.")
+def _create_instagram_container(video_path: Path, caption: str) -> str:
+    """Create a Reels container and upload the file straight to Instagram
+    (resumable upload) — no third-party hosting. Unpublished containers expire
+    after 24h, so this step alone is safe to test."""
+    token = os.environ["INSTAGRAM_ACCESS_TOKEN"]
+    resp = requests.post(
+        f"{IG_GRAPH}/me/media",
+        headers={"Authorization": f"Bearer {token}"},
+        data={"media_type": "REELS", "upload_type": "resumable",
+              "caption": caption, "share_to_feed": "true"},
+        timeout=30,
+    )
+    resp.raise_for_status()
+    data = resp.json()
+    if not data.get("id") or not data.get("uri"):
+        raise RuntimeError(f"Instagram container creation failed: {resp.text}")
+    size = os.path.getsize(video_path)
+    with open(video_path, "rb") as f:
+        up = requests.post(data["uri"], data=f, timeout=300, headers={
+            "Authorization": f"OAuth {token}", "offset": "0", "file_size": str(size)})
+    up.raise_for_status()
+    return data["id"]
 
 
 def _post_instagram(video_path: Path, caption: str) -> str:
@@ -128,27 +119,9 @@ def _post_instagram(video_path: Path, caption: str) -> str:
     if not access_token:
         raise ValueError("Instagram credentials missing. Need INSTAGRAM_ACCESS_TOKEN in .env")
 
-    print("  Uploading video to temporary hosting for Instagram...")
-    public_url = _upload_to_temp_host(video_path)
-    print(f"  Hosted at: {public_url}")
-
     headers = {"Authorization": f"Bearer {access_token}"}
-
-    # Step 1: Create the media container
-    payload = {
-        "media_type": "REELS",
-        "video_url": public_url,
-        "caption": caption,
-        "share_to_feed": "true",
-    }
-    resp = requests.post(
-        f"{IG_GRAPH}/me/media",
-        headers=headers, data=payload, timeout=30
-    )
-    resp.raise_for_status()
-    container_id = resp.json().get("id")
-    if not container_id:
-        raise RuntimeError(f"Failed to get container ID: {resp.text}")
+    print("  Uploading video directly to Instagram...")
+    container_id = _create_instagram_container(video_path, caption)
 
     print(f"  Created IG container: {container_id}. Waiting for Instagram to process video...")
 
