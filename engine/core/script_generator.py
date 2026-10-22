@@ -403,9 +403,9 @@ CTA_MODES = ("site", "comment")
 # keeps the mechanic without the tipster smell.
 COMMENT_GATE_WORD = os.getenv("COMMENT_GATE_WORD", "MODEL")
 
-# ~2.6 spoken words/sec at a natural pace, scaled by the TTS tempo (asset_loop.VOICE_SPEED)
-# so a faster voice gets a longer script and the video keeps its length.
-WORDS_PER_SEC = 2.6 * min(1.2, max(0.7, float(os.getenv("VOICE_SPEED", "1.15"))))
+# ~3.0 spoken words/sec at speed 1.0 (measured on eleven_multilingual_v2), scaled by the TTS
+# tempo (asset_loop.VOICE_SPEED) so a faster voice gets a longer script and the video keeps its length.
+WORDS_PER_SEC = 3.0 * min(1.2, max(0.7, float(os.getenv("VOICE_SPEED", "1.15"))))
 
 
 def _resolve_cta_mode(cta_mode: str | None) -> str:
@@ -915,12 +915,25 @@ Keep the compliance rule: it's a build-in-public / AI story — never betting ad
 
 VOICEOVER (context): \"\"\"{voiceover}\"\"\"
 BASE CAPTION: {caption}
+{examples}
+VOICE (all platforms): casual and first person, like texting a friend. Specific, slightly
+unpolished. Pull ONE concrete detail from the voiceover — don't summarize it, and never mention
+anything (where you are, what you're doing while posting) that isn't in the voiceover.
+It must NOT read as AI-written:
+- no em dashes (—) or semicolons; short plain sentences, fragments are fine
+- banned: "here's the thing", "game-changer", "dive in", "unlock", "journey", "excited to share",
+  "let's go", "level up", "revolutionize", "in today's world", "the future of",
+  and tipster words "picks", "tips", "locks" (say "the model's calls" or "predictions")
+- NO emojis at all, no three-item lists, no stacked rhetorical questions, never a hashtag mid-sentence
+HASHTAGS: lowercase, 1-2 broad (#buildinpublic #ai) + 2-3 niche (#footballdata #indiehacker
+#solofounder #machinelearning #sideproject). NEVER betting tags (#betting #bettingtips #tips #odds).
 
 Per platform:
-- tiktok: punchy, lowercase-ish, 1 line + a few tags. Casual.
-- instagram: 1-2 lines, a little more polished, 3-5 tags.
-- youtube: a Shorts title-style first line + one sentence; 3-5 tags.
-- x: a build-in-public tweet voice, conversational, 1-2 tags, under 260 chars.
+- tiktok: 1-2 short lines, lowercase ok, CTA last. 3-5 tags.
+- instagram: 2-4 short lines separated by line breaks, one small behind-the-scenes detail, CTA last. 4-6 tags.
+- youtube: the FIRST LINE is the video title (max 70 chars, no hashtags, curiosity not clickbait),
+  then a new line with a 2-3 sentence description. 3-5 tags.
+- x: one plain conversational tweet, max 240 chars including the CTA. 0-2 tags.
 
 Return ONLY a JSON object (no fences):
 {{"tiktok":{{"caption":"...","hashtags":"#a #b"}},"instagram":{{"caption":"...","hashtags":"#a #b"}},"youtube":{{"caption":"...","hashtags":"#a #b"}},"x":{{"caption":"...","hashtags":"#a #b"}}}}"""
@@ -932,6 +945,28 @@ _CAPTIONS_CTA_COMMENT = (
     '("comment {word}" → DM with the model\'s output) and NO link (the DM is the delivery). '
     "youtube and x have no comment-to-DM flow, so those two include epifanii.com instead of the gate."
 )
+
+
+# Emoji + pictograph ranges (incl. flags, variation selector, ZWJ) — stripped from every
+# caption in code, because the prompt alone doesn't reliably keep them out.
+_EMOJI = re.compile("[\U0001F000-\U0001FAFF\U00002600-\U000027BF\U00002B00-\U00002BFF"
+                    "\U0001F1E6-\U0001F1FF\uFE0F\u200D]+")
+
+
+def _strip_emoji(text: str) -> str:
+    return re.sub(r"[ \t]{2,}", " ", _EMOJI.sub("", text)).strip()
+
+
+def _caption_examples(limit: int = 6) -> str:
+    """Top-engagement captions from the competitor research (hooks swipe file),
+    emoji-stripped, as style references for the caption writer."""
+    caps = [_strip_emoji(c.get("caption", "")) for c in _load_swipe().get("captions") or []]
+    caps = [c for c in caps if len(c) >= 30][:limit]
+    if not caps:
+        return ""
+    lines = "\n".join(f'- "{c[:220]}"' for c in caps)
+    return ("\nREAL TOP-PERFORMING CAPTIONS from creators in this niche. Study their length, "
+            "plainness and rhythm. Do NOT copy them or their topics:\n" + lines + "\n")
 
 
 def platform_captions(script: JourneyScript, cta_mode: str | None = None) -> dict:
@@ -950,7 +985,7 @@ def platform_captions(script: JourneyScript, cta_mode: str | None = None) -> dic
         client = _get_client()
         model = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
         prompt = _PLATFORM_CAPTIONS.format(voiceover=script.voiceover, caption=script.caption,
-                                           cta_note=cta_note)
+                                           cta_note=cta_note, examples=_caption_examples())
         resp = call_gemini_with_retry(client=client, model=model, contents=prompt)
         raw = re.sub(r"^```(?:json)?|```$", "", resp.text.strip(), flags=re.MULTILINE).strip()
         data = json.loads(raw)
@@ -964,7 +999,7 @@ def platform_captions(script: JourneyScript, cta_mode: str | None = None) -> dic
                       "hashtags": str(v.get("hashtags", script.hashtags)).strip()}
         else:
             out[p] = dict(base)
-    return out
+    return {p: {k: _strip_emoji(v) for k, v in c.items()} for p, c in out.items()}
 
 
 def suggest_inserts(voiceover: str, max_cues: int = 4) -> list[dict]:

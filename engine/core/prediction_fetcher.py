@@ -11,7 +11,6 @@ from dotenv import load_dotenv
 load_dotenv()
 
 API_URL = os.getenv("EPIFANI_API_URL", "http://localhost:3000/api/predictions")
-MIN_CONFIDENCE = float(os.getenv("MIN_CONFIDENCE", "0.60"))
 VALUE_BETS_ONLY = os.getenv("VALUE_BETS_ONLY", "true").lower() == "true"
 # Only these markets can appear in content: Epifani's Core3 strategy (the markets the
 # website stakes on). BTTS and Double Chance lost on live CLV, so publicly featuring
@@ -191,8 +190,11 @@ def fetch_picks(
             mkt = p["market"]
             if mkt == "Draw No Bet":
                 mkt = "DNB"
-            if (p["probability"] >= MIN_CONFIDENCE
-                and (not _value_only or p.get("is_value", False))
+            # No probability floor: the portal's Top 3 (lib/topPicks.ts) ranks by edge
+            # alone, and a 60% floor left whole days with zero picks while the site had
+            # three. VIDEO_MARKETS still keeps losing markets (BTTS/DC) out of content.
+            if ((not _value_only or p.get("is_value", False))
+                and p.get("edge", 0) > 0  # never feature a pick the model itself rates as no-edge
                 and mkt in VIDEO_MARKETS
                 and mkt not in _excluded):
                 p_copy = dict(p)
@@ -202,8 +204,8 @@ def fetch_picks(
         if not candidates:
             continue
 
-        # Best single pick for this match (after exclusions)
-        best = max(candidates, key=lambda p: p["probability"])
+        # Best single pick for this match by edge — same rule as the portal's Top 3
+        best = max(candidates, key=lambda p: p.get("edge", float("-inf")))
         tier_name, tier_color = _tier(best["probability"])
 
         picks.append(Pick(
@@ -217,14 +219,14 @@ def fetch_picks(
             outcome     = best["outcome"],
             odds        = round(best["odds"], 2),
             probability = best["probability"],
-            edge        = round(max(0.0, min(best["probability"], 0.88) - (1.0 / best["odds"])), 4),
+            edge        = round(best.get("edge", 0.0), 4),
             tier        = tier_name,
             tier_color  = tier_color,
             label       = _label(best["market"], best["outcome"]),
             confidence_pct = min(round(best["probability"] * 100), 88),
         ))
 
-    picks.sort(key=lambda p: p.probability, reverse=True)
+    picks.sort(key=lambda p: p.edge, reverse=True)
 
     if top is not None:
         picks = picks[:top]

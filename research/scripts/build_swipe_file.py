@@ -157,11 +157,27 @@ def main():
     winners = [{k: v for k, v in h.items() if k not in ("fresh", "winner", "punish")}
                for h in winners]
 
+    # Top real captions (the on-platform text, not the spoken hook) — the engine's
+    # per-platform caption writer studies their length/rhythm. Same junk guard as
+    # hooks: above the bottom quartile, never punish-flagged.
+    cap_seen, captions = set(), []
+    for name in args.projects:
+        data = json.loads((RESEARCH_DIR / "projects" / name / "raw-posts.json").read_text())
+        for p in data.get("posts", []):
+            text = (p.get("caption") or "").strip()
+            if len(text) < 20 or p.get("punish") or text.lower() in cap_seen:
+                continue
+            cap_seen.add(text.lower())
+            captions.append({"caption": text, "engagement": engagement(p), "author": p.get("author", "")})
+    captions = sorted((c for c in captions if c["engagement"] > cutoff),
+                      key=lambda c: -c["engagement"])[:10]
+
     out = {
         "generated": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "projects": args.projects,
         "hooks": winners,
         "punish_patterns": losers,
+        "captions": captions,
     }
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(out, indent=2, ensure_ascii=False) + "\n")
