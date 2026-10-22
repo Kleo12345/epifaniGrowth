@@ -48,9 +48,13 @@ _ENTRIES = [
          "is deleted or curated after the fact; the daily top predictions are free on "
          "epifanii.com. Only then show today's predictions as proof, briefly.",
          secs=55),
-    _day(2, "proof", "CURIOSITY", 1,
-         "What Epifani actually is — an AI that predicts football, graded automatically, "
-         "nothing curated after the fact"),
+    _day(2, "human", "CURIOSITY", 1,
+         "Why Epifani publishes every single prediction, including the misses, when most "
+         "prediction accounts only ever show their wins",
+         "Day 1 already explained what Epifani is — don't repeat it, one line of context at "
+         "most. This is the why: a record you can only trust if nothing is hidden. Speak to "
+         "the stance, not a backstory — don't invent personal anecdotes, dates or numbers, "
+         "and never name or attack other accounts."),
     _day(3, "proof", "TRUST", 1,
          "Why it's built to be checked — every pick is graded automatically, against the "
          "market's own closing price"),
