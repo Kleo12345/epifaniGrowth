@@ -8,6 +8,8 @@ tzdata>=2024.1
 edge-tts>=7.0.0
 numpy>=1.26.0
 pygame>=2.5.0
+# avatar background removal (lazy import in core/asset_loop.py)
+rembg[cpu]>=2.0.70
 # web_ui dashboard / code cards only
 streamlit>=1.35.0
 Pygments>=2.15.0
