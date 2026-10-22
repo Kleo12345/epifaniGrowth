@@ -1,0 +1,21 @@
+# Journey daemon on the always-on Epifani server (deploy@34.51.216.191).
+# Install: copy to ~/.config/systemd/user/epifani-journey.service, then
+#   systemctl --user daemon-reload && systemctl --user enable --now epifani-journey
+# Deploy code from the PC (committed code only):
+#   git archive HEAD engine | ssh deploy@34.51.216.191 'tar -x -C ~/epifaniGrowthPlan'
+# Only ONE copy may run: Telegram allows a single getUpdates poller per bot.
+[Unit]
+Description=Epifani Founder's Journey Telegram daemon
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/epifaniGrowthPlan/engine
+ExecStart=%h/miniforge3/envs/epifani-growth/bin/python -u journey_daemon.py
+Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=default.target
