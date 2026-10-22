@@ -257,7 +257,7 @@ CONTEXT
 {content_frame_line}- The engine's top {n_picks} picks today (drop these in casually as proof, not tips):
 {picks_block}
 
-HARD LIMIT: under {target_words} words (~{target_secs}s). Shorter is better. Cut anything that sounds written.
+HARD LIMIT: under {target_words} words (~{target_secs}s). Use the time you have, but don't pad. Cut anything that sounds written.
 
 TOPIC COMES FIRST. Everything concrete you say — the story, any number, any incident — must come from
 "what he actually did today" above. Never invent a detail (a bug, a metric, an event) that isn't in it.
@@ -589,6 +589,7 @@ def generate_journey_script(
     hook_style: str | None = None,
     cta_mode: str | None = None,
     content_frame: str | None = None,
+    target_secs: int = 35,
 ) -> JourneyScript:
     """Generate a first-person Founder's Journey voiceover script, vetted by an LLM critic.
 
@@ -617,7 +618,6 @@ def generate_journey_script(
     proof = picks[:proof_picks]
     picks_block = "\n".join(_pick_line(p) for p in proof) if proof else "- (no qualifying picks today)"
     n_picks = len(proof)
-    target_secs = 35
     target_words = round(target_secs * WORDS_PER_SEC)
     hook_style = hook_style or random.choice(HOOK_STYLES)
 

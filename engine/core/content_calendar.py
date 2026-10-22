@@ -20,7 +20,9 @@ Each entry:
 _RECORD_TOPIC = "Weekly record check-in"
 
 
-def _day(day: int, fam: str, hook: str, depth: int, topic: str, note: str | None = None) -> dict:
+def _day(day: int, fam: str, hook: str, depth: int, topic: str, note: str | None = None,
+         secs: int | None = None) -> dict:
+    """secs: target voiceover length for this day (None = the generator's default)."""
     return {
         "day": day,
         "fam": fam,
@@ -29,6 +31,7 @@ def _day(day: int, fam: str, hook: str, depth: int, topic: str, note: str | None
         "topic": topic,
         "note": note,
         "kind": "record" if topic == _RECORD_TOPIC else "journey",
+        "secs": secs,
     }
 
 
@@ -37,12 +40,14 @@ _ENTRIES = [
     _day(1, "human", "CONFESSION", 1,
          "\"I've been building this AI prediction platform for months without saying a word. "
          "Here's the honest record.\"",
-         "The premise. Pinned / start-here video. Right after the confession, explain in one "
-         "plain sentence what Epifani actually IS, in case this is someone's first video — an "
-         "AI that predicts football matches and grades its own picks automatically, nothing "
-         "curated after the fact. Don't go deep (day 2 does that) — just enough that a "
-         "first-time viewer knows what they're looking at before today's picks show up as "
-         "proof, briefly."),
+         "The premise. Pinned / start-here video, so it runs longer. Right after the "
+         "confession, properly explain what Epifani IS for a first-time viewer, in plain "
+         "words: an AI that predicts football matches across many leagues every day; every "
+         "prediction is published with its confidence BEFORE kickoff; each one is graded "
+         "automatically against the real result and the market's closing odds, and nothing "
+         "is deleted or curated after the fact; the daily top predictions are free on "
+         "epifanii.com. Only then show today's predictions as proof, briefly.",
+         secs=55),
     _day(2, "proof", "CURIOSITY", 1,
          "What Epifani actually is — an AI that predicts football, graded automatically, "
          "nothing curated after the fact"),

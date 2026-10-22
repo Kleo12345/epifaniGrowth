@@ -203,6 +203,7 @@ def _build_and_send(state: dict) -> None:
             script = generate_journey_script(
                 picks, milestone=milestone, hook_style=hook_style,
                 content_frame=CONTENT_FRAME_BY_FAM.get(state.get("fam")),
+                target_secs=state.get("secs") or 35,
             )
         except ScriptQualityError as e:
             _report_quality_failure(state, e)
@@ -268,6 +269,7 @@ def job_generate_daily() -> None:
     state["fam"] = entry["fam"]
     state["hook"] = entry["hook"]
     state["kind"] = entry["kind"]
+    state["secs"] = entry.get("secs")
     state["milestone"] = milestone
     _save_state(state)
     _generate_and_send(state)

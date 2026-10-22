@@ -67,7 +67,7 @@ def demo():
     jd.project_day = lambda: 9  # calendar day 9: fam=build, hook=STRUGGLE, kind=journey
     fake_script = types.SimpleNamespace(day=9, milestone="m", caption="test caption",
                                         hashtags="#ai", voiceover="hi")
-    jd.generate_journey_script = lambda picks, milestone, hook_style=None, content_frame=None: fake_script
+    jd.generate_journey_script = lambda picks, milestone, hook_style=None, content_frame=None, **kw: fake_script
     fam_calls = []
 
     def fake_build(picks, script, fam=None):
@@ -173,7 +173,7 @@ def demo():
     # 7. A day with a quoted calendar topic (day 32) builds and sends the same as
     #    any other journey day — no on-screen card logic to special-case anymore.
     jd.project_day = lambda: 32
-    jd.generate_journey_script = lambda picks, milestone, hook_style=None, content_frame=None: fake_script
+    jd.generate_journey_script = lambda picks, milestone, hook_style=None, content_frame=None, **kw: fake_script
     jd.job_generate_daily()
     assert fam_calls[-1] == "human", "day 32's fam should drive the background palette"
     jd.STATE_PATH.unlink(missing_ok=True)
