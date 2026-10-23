@@ -88,28 +88,36 @@ def is_configured() -> bool:
     return has_instagram or has_tiktok
 
 
+def _temp_public_url(video_path: Path) -> str:
+    """Instagram's API only takes a public video_url (it rejects direct uploads for
+    this login type), so park the file on litterbox.catbox.moe, which deletes it after
+    an hour. Plain catbox stopped accepting anonymous uploads ("Invalid uploader")."""
+    with open(video_path, "rb") as f:
+        resp = requests.post(
+            "https://litterbox.catbox.moe/resources/internals/api.php",
+            data={"reqtype": "fileupload", "time": "1h"},
+            files={"fileToUpload": f},
+            timeout=180,
+        )
+    url = resp.text.strip()
+    if resp.status_code != 200 or not url.startswith("https://"):
+        raise RuntimeError(f"Temporary video hosting failed: {resp.status_code} {url[:120]}")
+    return url
+
+
 def _create_instagram_container(video_path: Path, caption: str) -> str:
-    """Create a Reels container and upload the file straight to Instagram
-    (resumable upload) — no third-party hosting. Unpublished containers expire
-    after 24h, so this step alone is safe to test."""
-    token = os.environ["INSTAGRAM_ACCESS_TOKEN"]
+    """Host the file briefly and create the Reels container from it. Unpublished
+    containers expire after 24h, so this step alone is safe to test."""
     resp = requests.post(
         f"{IG_GRAPH}/me/media",
-        headers={"Authorization": f"Bearer {token}"},
-        data={"media_type": "REELS", "upload_type": "resumable",
+        headers={"Authorization": f"Bearer {os.environ['INSTAGRAM_ACCESS_TOKEN']}"},
+        data={"media_type": "REELS", "video_url": _temp_public_url(video_path),
               "caption": caption, "share_to_feed": "true"},
         timeout=30,
     )
-    resp.raise_for_status()
-    data = resp.json()
-    if not data.get("id") or not data.get("uri"):
-        raise RuntimeError(f"Instagram container creation failed: {resp.text}")
-    size = os.path.getsize(video_path)
-    with open(video_path, "rb") as f:
-        up = requests.post(data["uri"], data=f, timeout=300, headers={
-            "Authorization": f"OAuth {token}", "offset": "0", "file_size": str(size)})
-    up.raise_for_status()
-    return data["id"]
+    if not resp.ok:  # surface Meta's reason, not just "400 Bad Request"
+        raise RuntimeError(f"Instagram container creation failed: {resp.text[:300]}")
+    return resp.json()["id"]
 
 
 def _post_instagram(video_path: Path, caption: str) -> str:
@@ -120,7 +128,7 @@ def _post_instagram(video_path: Path, caption: str) -> str:
         raise ValueError("Instagram credentials missing. Need INSTAGRAM_ACCESS_TOKEN in .env")
 
     headers = {"Authorization": f"Bearer {access_token}"}
-    print("  Uploading video directly to Instagram...")
+    print("  Hosting video briefly for Instagram to fetch...")
     container_id = _create_instagram_container(video_path, caption)
 
     print(f"  Created IG container: {container_id}. Waiting for Instagram to process video...")
