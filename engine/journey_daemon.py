@@ -47,7 +47,7 @@ load_dotenv()
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from core import telegram_bot as tg
-from core.daily_report import daily_report
+from core.daily_report import daily_report, retry_pending_analysis
 from core.social_publish import configured_platforms, publish
 from core.content_calendar import calendar_entry
 from core.prediction_fetcher import fetch_picks, fetch_performance, fetch_recent_winners
@@ -342,6 +342,16 @@ def job_nightly_report() -> None:
         tg.send_message(f"⚠️ Tonight's growth report failed: {e}")
 
 
+def job_retry_analysis() -> None:
+    """Hourly: if last night's report went out without Claude's analysis, try again."""
+    try:
+        msg = retry_pending_analysis()
+        if msg:
+            tg.send_message(msg)
+    except Exception as e:
+        print(f"  ⚠ analysis retry failed: {e}")
+
+
 # ── Telegram event handling ────────────────────────────────────────
 
 def handle_update(update: dict) -> None:
@@ -427,6 +437,7 @@ def run() -> None:
     # Retry net: re-runs the (idempotent) catch-up so a day that crashed back to idle,
     # or a wake from sleep the cron missed, gets generated without a restart.
     scheduler.add_job(_catch_up_if_missed, "interval", minutes=15, id="retry_catch_up")
+    scheduler.add_job(job_retry_analysis, "interval", hours=1, id="retry_analysis")
     scheduler.start()
     print(f"Journey daemon started — generates daily at {PROMPT_HOUR:02d}:{PROMPT_MINUTE:02d} {TIMEZONE}")
     state = _load_state()

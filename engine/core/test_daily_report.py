@@ -57,7 +57,23 @@ def demo():
     assert "COULD NOT COLLECT: youtube: 401" in text, text
 
     analytics.DB_PATH.unlink(missing_ok=True)
-    print("OK — daily_report links TikTok drafts and computes deltas")
+
+    # Late analysis: a numbers-only report gets its analysis filled in once Claude
+    # is reachable again, exactly once.
+    import tempfile
+    dr.REPORTS_DIR = Path(tempfile.mkdtemp())
+    report = dr.REPORTS_DIR / f"{today}.md"
+    report.write_text(f"# Growth report {today}\n\n{dr.UNAVAILABLE}\n\n## Numbers\n\nviews 5\n")
+    dr.analyze = lambda numbers, previous="": None          # still at the usage limit
+    assert dr.retry_pending_analysis() is None and dr.UNAVAILABLE in report.read_text()
+    seen = []
+    dr.analyze = lambda numbers, previous="": seen.append(numbers) or "VERDICT: fine"
+    msg = dr.retry_pending_analysis()
+    assert msg and "VERDICT: fine" in msg and seen == ["views 5"], (msg, seen)
+    assert "VERDICT: fine" in report.read_text() and dr.UNAVAILABLE not in report.read_text()
+    assert dr.retry_pending_analysis() is None, "already analysed — no second message"
+
+    print("OK — daily_report links TikTok drafts, computes deltas, retries late analysis")
 
 
 if __name__ == "__main__":

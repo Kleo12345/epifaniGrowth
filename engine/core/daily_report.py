@@ -272,6 +272,9 @@ def analyze(digest_text: str, previous: str = "") -> str | None:
     return out.stdout.strip()
 
 
+UNAVAILABLE = "(Claude analysis unavailable tonight — raw numbers below.)"
+
+
 def daily_report(today: str | None = None) -> str:
     """collect → digest → analyze → save. Returns the text to send to Telegram."""
     today = today or date.today().isoformat()
@@ -280,10 +283,30 @@ def daily_report(today: str | None = None) -> str:
     REPORTS_DIR.mkdir(parents=True, exist_ok=True)
     prev_files = sorted(p for p in REPORTS_DIR.glob("*.md") if p.stem < today)
     previous = prev_files[-1].read_text(encoding="utf-8").split("## Numbers")[0] if prev_files else ""
-    analysis = analyze(text, previous) or "(Claude analysis unavailable tonight — raw numbers below.)"
+    analysis = analyze(text, previous) or UNAVAILABLE
     (REPORTS_DIR / f"{today}.md").write_text(
         f"# Growth report {today}\n\n{analysis}\n\n## Numbers\n\n{text}\n", encoding="utf-8")
     return f"📊 Growth report — {today}\n\n{analysis}\n\n— numbers —\n{text}"
+
+
+def retry_pending_analysis() -> str | None:
+    """If the latest report went out numbers-only (e.g. the Claude plan was at its usage
+    limit at 22:30), re-run just the analysis on its saved numbers. Run hourly by the
+    daemon; only the latest report from today/yesterday is retried, so it can't loop
+    forever. Returns the Telegram message on success, else None."""
+    files = sorted(REPORTS_DIR.glob("*.md"))
+    if not files or files[-1].stem < (date.today() - timedelta(days=1)).isoformat():
+        return None
+    latest = files[-1]
+    text = latest.read_text(encoding="utf-8")
+    if UNAVAILABLE not in text or "## Numbers" not in text:
+        return None
+    previous = files[-2].read_text(encoding="utf-8").split("## Numbers")[0] if len(files) > 1 else ""
+    analysis = analyze(text.split("## Numbers", 1)[1].strip(), previous)
+    if not analysis:
+        return None
+    latest.write_text(text.replace(UNAVAILABLE, analysis), encoding="utf-8")
+    return f"📊 Growth analysis for {latest.stem} (late: Claude wasn't available at 22:30)\n\n{analysis}"
 
 
 if __name__ == "__main__":
