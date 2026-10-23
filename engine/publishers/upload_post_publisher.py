@@ -97,6 +97,8 @@ def _temp_public_url(video_path: Path) -> str:
             "https://litterbox.catbox.moe/resources/internals/api.php",
             data={"reqtype": "fileupload", "time": "1h"},
             files={"fileToUpload": f},
+            # litterbox answers 412 to the default python-requests User-Agent
+            headers={"User-Agent": "epifani-engine/1.0 (+https://www.epifanii.com)"},
             timeout=180,
         )
     url = resp.text.strip()
