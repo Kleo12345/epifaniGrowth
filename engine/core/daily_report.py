@@ -266,7 +266,8 @@ def analyze(digest_text: str, previous: str = "") -> str | None:
         print(f"  ⚠ claude analysis failed: {e}")
         return None
     if out.returncode != 0 or not out.stdout.strip():
-        print(f"  ⚠ claude exited {out.returncode}: {out.stderr[-300:]}")
+        # Claude prints usage-limit / auth errors to stdout, not stderr — log both.
+        print(f"  ⚠ claude exited {out.returncode}: {(out.stderr or out.stdout)[-300:]}")
         return None
     return out.stdout.strip()
 
