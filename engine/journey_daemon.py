@@ -62,6 +62,7 @@ from core.script_generator import (
 )
 from core.video_builder import build_journey_video, stop_mpt
 from publishers.upload_post_publisher import refresh_instagram_token
+from tools.push_social import push as push_social
 
 TIMEZONE = "Europe/Athens"
 PROMPT_HOUR, PROMPT_MINUTE = 8, 50
@@ -342,6 +343,14 @@ def job_nightly_report() -> None:
         tg.send_message(f"⚠️ Tonight's growth report failed: {e}")
 
 
+def job_push_social() -> None:
+    """Every 30 min: channel views/followers to the Bot Dashboard's Social tab."""
+    try:
+        push_social()
+    except Exception as e:
+        print(f"  ⚠ social dashboard push failed: {e}")
+
+
 def job_retry_analysis() -> None:
     """Hourly: if last night's report went out without Claude's analysis, try again."""
     try:
@@ -438,6 +447,8 @@ def run() -> None:
     # or a wake from sleep the cron missed, gets generated without a restart.
     scheduler.add_job(_catch_up_if_missed, "interval", minutes=15, id="retry_catch_up")
     scheduler.add_job(job_retry_analysis, "interval", hours=1, id="retry_analysis")
+    scheduler.add_job(job_push_social, "interval", minutes=30, id="push_social",
+                      next_run_time=datetime.now(ZoneInfo(TIMEZONE)))  # first push right away
     scheduler.start()
     print(f"Journey daemon started — generates daily at {PROMPT_HOUR:02d}:{PROMPT_MINUTE:02d} {TIMEZONE}")
     state = _load_state()
