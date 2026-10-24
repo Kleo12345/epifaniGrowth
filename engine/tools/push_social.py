@@ -2,10 +2,11 @@
 """
 Push Epifani's social stats to the Bot Dashboard's "Social" tab.
 
-Every connected channel's whole account, not just the journey videos: all-time
-views / likes / comments / shares summed over every post, follower count, and a
-per-post list (journey posts tagged with their calendar day). The journey
-daemon runs push() every 30 minutes; the dashboard keeps the history for charts.
+Every post since the journey's Day 1 (EPIFANI_START_DATE, Europe/Athens) on each
+connected channel: views / likes / comments / shares summed over those posts, a
+per-post list (journey posts tagged with their calendar day), and the account's
+follower count (platforms can't split followers by post). The journey daemon runs
+push() every 30 minutes; the dashboard keeps the history for charts.
 
 Config: ~/.bot_dashboard.env (DASH_URL, PUSH_SECRET) — the same file the trading
 bots' push_snapshot.py uses. Without it, push() does nothing.
@@ -13,11 +14,13 @@ bots' push_snapshot.py uses. Without it, push() does nothing.
 Run by hand (from engine/):
   python -m tools.push_social --print     # show the snapshot, send nothing
   python -m tools.push_social             # collect and send
+  python -m tools.push_social --reset-history   # send, and restart the dashboard's charts
 """
 import json
 import os
 import sys
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 from pathlib import Path
 
 import requests
@@ -120,8 +123,28 @@ def _tiktok() -> tuple[list, int | None]:
 _COLLECTORS = {"instagram": _instagram, "youtube": _youtube, "tiktok": _tiktok}
 
 
+def _since() -> datetime | None:
+    """Start of the journey's Day 1 in Athens time, or None (= every post) if unset."""
+    raw = os.getenv("EPIFANI_START_DATE", "").strip()
+    try:
+        return datetime.fromisoformat(raw).replace(tzinfo=ZoneInfo("Europe/Athens"))
+    except ValueError:
+        return None
+
+
+def _after(date_str, since) -> bool:
+    if since is None:
+        return True
+    try:
+        return datetime.fromisoformat(str(date_str).replace("Z", "+00:00")) >= since
+    except ValueError:
+        return False
+
+
 def snapshot() -> dict:
-    """{platforms: {p: {followers, views, likes, comments, shares, posts}}, posts: [...], errors: {p: msg}}"""
+    """{platforms: {p: {followers, views, likes, comments, shares, posts}}, posts: [...], errors: {p: msg}}
+    — counting only posts from the journey's Day 1 onwards."""
+    since = _since()
     day_of = {(r["platform"], r["post_id"]): r["day"] for r in analytics.social_posts_since(100000) if r["post_id"]}
     platforms, posts, errors = {}, [], {}
     for p in configured_platforms():
@@ -132,6 +155,7 @@ def snapshot() -> dict:
         except Exception as e:
             errors[p] = str(e)[:200]
             continue
+        items = [it for it in items if _after(it["date"], since)]
         for it in items:
             it["day"] = day_of.get((p, it["id"]))
         platforms[p] = {"followers": followers, "posts": len(items),
@@ -148,12 +172,15 @@ def _dash_config() -> dict:
     return {k.strip(): v.strip() for k, v in pairs}
 
 
-def push() -> bool:
-    """Collect and send to the dashboard. Quietly skips when ~/.bot_dashboard.env is missing."""
+def push(reset_history: bool = False) -> bool:
+    """Collect and send to the dashboard. Quietly skips when ~/.bot_dashboard.env is missing.
+    reset_history=True makes the dashboard drop its stored chart history first (after
+    changing what's counted, so the charts don't show a fake jump)."""
     cfg = _dash_config()
     if not cfg.get("DASH_URL") or not cfg.get("PUSH_SECRET"):
         return False
-    r = requests.post(f"{cfg['DASH_URL'].rstrip('/')}/api/social", json=snapshot(),
+    r = requests.post(f"{cfg['DASH_URL'].rstrip('/')}/api/social",
+                      json={**snapshot(), "reset_history": reset_history},
                       headers={"x-push-secret": cfg["PUSH_SECRET"]}, timeout=30)
     r.raise_for_status()
     return True
@@ -165,4 +192,4 @@ if __name__ == "__main__":
     if "--print" in sys.argv:
         print(json.dumps(snapshot(), indent=1, default=str))
     else:
-        print("pushed" if push() else "no ~/.bot_dashboard.env — nothing sent")
+        print("pushed" if push(reset_history="--reset-history" in sys.argv) else "no ~/.bot_dashboard.env — nothing sent")
