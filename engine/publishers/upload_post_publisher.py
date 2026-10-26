@@ -107,18 +107,29 @@ def _litterbox(video_path: Path) -> str:
     return url
 
 
+def _uguu(video_path: Path) -> str:
+    """uguu.se keeps uploads 3h and returns a direct file URL."""
+    with open(video_path, "rb") as f:
+        resp = requests.post("https://uguu.se/upload", files={"files[]": f},
+                             headers=_HOST_UA, timeout=300)
+    try:
+        url = resp.json()["files"][0]["url"]
+    except Exception:
+        raise RuntimeError(f"uguu {resp.status_code} {resp.text[:120]}")
+    return url
+
+
 def _temp_public_url(video_path: Path) -> str:
     """Instagram's API only takes a public video_url (it rejects direct uploads for
-    this login type), so park the file on litterbox, which deletes it after an hour.
-    Plain catbox stopped accepting anonymous uploads ("Invalid uploader"), and
-    tmpfiles.org's /dl/ links now redirect to an HTML page. Litterbox has brief 500
-    outages, so retry with backoff before giving up.
-    ponytail: single host — add a second (or self-host on the server) if outages outlast ~3 min."""
+    this login type), so park the file on a short-lived anonymous host. Plain catbox
+    stopped accepting anonymous uploads ("Invalid uploader"), and tmpfiles.org's /dl/
+    links now redirect to an HTML page. Litterbox has 500 outages, so retry it and
+    fall back to uguu.se."""
     errors = []
-    for wait in (0, 30, 60, 90):
+    for wait, host in ((0, _litterbox), (30, _litterbox), (0, _uguu), (30, _uguu)):
         time.sleep(wait)
         try:
-            return _litterbox(video_path)
+            return host(video_path)
         except Exception as e:
             errors.append(str(e)[:80])
     raise RuntimeError(f"Temporary video hosting failed: {' | '.join(errors)}")
