@@ -88,23 +88,40 @@ def is_configured() -> bool:
     return has_instagram or has_tiktok
 
 
-def _temp_public_url(video_path: Path) -> str:
-    """Instagram's API only takes a public video_url (it rejects direct uploads for
-    this login type), so park the file on litterbox.catbox.moe, which deletes it after
-    an hour. Plain catbox stopped accepting anonymous uploads ("Invalid uploader")."""
+_HOST_UA = {"User-Agent": "epifani-engine/1.0 (+https://www.epifanii.com)"}
+
+
+def _litterbox(video_path: Path) -> str:
     with open(video_path, "rb") as f:
         resp = requests.post(
             "https://litterbox.catbox.moe/resources/internals/api.php",
             data={"reqtype": "fileupload", "time": "1h"},
             files={"fileToUpload": f},
             # litterbox answers 412 to the default python-requests User-Agent
-            headers={"User-Agent": "epifani-engine/1.0 (+https://www.epifanii.com)"},
+            headers=_HOST_UA,
             timeout=180,
         )
     url = resp.text.strip()
     if resp.status_code != 200 or not url.startswith("https://"):
-        raise RuntimeError(f"Temporary video hosting failed: {resp.status_code} {url[:120]}")
+        raise RuntimeError(f"litterbox {resp.status_code} {url[:120]}")
     return url
+
+
+def _temp_public_url(video_path: Path) -> str:
+    """Instagram's API only takes a public video_url (it rejects direct uploads for
+    this login type), so park the file on litterbox, which deletes it after an hour.
+    Plain catbox stopped accepting anonymous uploads ("Invalid uploader"), and
+    tmpfiles.org's /dl/ links now redirect to an HTML page. Litterbox has brief 500
+    outages, so retry with backoff before giving up.
+    ponytail: single host — add a second (or self-host on the server) if outages outlast ~3 min."""
+    errors = []
+    for wait in (0, 30, 60, 90):
+        time.sleep(wait)
+        try:
+            return _litterbox(video_path)
+        except Exception as e:
+            errors.append(str(e)[:80])
+    raise RuntimeError(f"Temporary video hosting failed: {' | '.join(errors)}")
 
 
 def _create_instagram_container(video_path: Path, caption: str) -> str:

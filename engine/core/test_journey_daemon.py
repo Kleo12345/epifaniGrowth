@@ -222,6 +222,25 @@ def demo():
     assert jd._load_state()["crashes"] == jd.MAX_CRASH_RETRIES, "no retries once parked in error"
     jd.STATE_PATH.unlink(missing_ok=True)
 
+    # Gate misses are retried with fresh takes; only a persistent miss surfaces.
+    takes = []
+
+    def misses_then(passes_on):
+        def gen():
+            takes.append(1)
+            if len(takes) < passes_on:
+                raise jd.ScriptQualityError({"avg": 8.3, "hook": 7, "safe": 9}, "weak hook", "vo", 1)
+            return "script"
+        return gen
+
+    assert jd._until_gate_clears(misses_then(3)) == "script" and len(takes) == 3
+    takes.clear()
+    try:
+        jd._until_gate_clears(misses_then(99))
+        raise AssertionError("should give up")
+    except jd.ScriptQualityError:
+        assert len(takes) == jd.MAX_GATE_ATTEMPTS
+
     print("OK — journey_daemon state machine behaves as expected")
 
 

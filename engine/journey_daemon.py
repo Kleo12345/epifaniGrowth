@@ -128,10 +128,27 @@ def _report_quality_failure(state: dict, e: ScriptQualityError) -> None:
     state["attempts"] += 1
     _save_state(state)
     tg.send_message(
-        f"✗ Script never cleared the quality gate after {e.revisions} rewrite(s) "
-        f"(avg {e.scores['avg']}). Tap Regenerate to try again, or send a note first.",
+        f"✗ Script never cleared the quality gate in {MAX_GATE_ATTEMPTS} fresh takes "
+        f"(last avg {e.scores['avg']}). Tap Regenerate to try again, or send a note first.",
         reply_markup=tg.RETRY_KEYBOARD,
     )
+
+
+MAX_GATE_ATTEMPTS = 6
+
+
+def _until_gate_clears(generate):
+    """Fresh takes until one clears the critic gate, so a near-miss (e.g. the
+    condense pass knocking a floor axis) doesn't need a manual Regenerate.
+    ponytail: capped at MAX_GATE_ATTEMPTS to bound Gemini spend on a topic that
+    can never pass; only then is the founder asked."""
+    for attempt in range(1, MAX_GATE_ATTEMPTS + 1):
+        try:
+            return generate()
+        except ScriptQualityError as e:
+            print(f"  ↻ Gate miss {attempt}/{MAX_GATE_ATTEMPTS} (avg {e.scores['avg']}) — fresh take")
+            if attempt == MAX_GATE_ATTEMPTS:
+                raise
 
 
 MAX_CRASH_RETRIES = 3
@@ -177,9 +194,9 @@ def _build_and_send(state: dict) -> None:
             perf, winners = None, []
             print(f"  ⚠ fetch_performance/fetch_recent_winners failed: {e}")
         try:
-            script = generate_track_record_script(
+            script = _until_gate_clears(lambda: generate_track_record_script(
                 perf, winners, hook_style=hook_style, revision_note=feedback or "",
-            )
+            ))
         except ValueError as e:
             state["status"] = "error"
             state["attempts"] += 1
@@ -201,11 +218,11 @@ def _build_and_send(state: dict) -> None:
             picks = []
             print(f"  ⚠ fetch_picks failed: {e}")
         try:
-            script = generate_journey_script(
+            script = _until_gate_clears(lambda: generate_journey_script(
                 picks, milestone=milestone, hook_style=hook_style,
                 content_frame=CONTENT_FRAME_BY_FAM.get(state.get("fam")),
                 target_secs=state.get("secs") or 35,
-            )
+            ))
         except ScriptQualityError as e:
             _report_quality_failure(state, e)
             return
