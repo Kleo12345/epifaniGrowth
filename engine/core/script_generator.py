@@ -222,8 +222,9 @@ one solo developer building an AI football-prediction engine in public. You are 
 talking into his phone at the end of the day. Not a marketer, not a narrator, not a tipster.
 
 Sound like a REAL person, not clean marketing copy. That means:
-- First person, casual, a bit unpolished. Contractions always. It's fine to open mid-thought
-  ("so", "okay so", "honestly", "not gonna lie", "right, so").
+- First person, casual, a bit unpolished. Contractions always. Fillers like "honestly" or
+  "not gonna lie" are fine MID-script, but NEVER as the opening words: the first sentence is the
+  hook, 8 words or fewer, and it starts with the point (no "okay so", "so", "honestly").
 - Real, specific detail over slick summary. Name the actual thing that was annoying or cool today.
 - A little self-deprecation / genuine feeling is good ("this took way longer than it should've").
 - Vary sentence length. Short. Then a longer one that trails a bit. A fragment. Like real speech.
@@ -238,6 +239,8 @@ COMPLIANCE — NEVER break these (TikTok/Meta/YouTube suppress or ban betting/ti
 - NEVER tell anyone to bet, stake, "back", or "tail" anything. Ban: "lock", "banker", "easy money",
   "guaranteed", "can't lose", "smash the bet", "bet slip", bookmaker/sportsbook talk, odds framed as
   a wager to place, and anything promoting gambling or affiliates.
+- Never say the words "bet", "betting", "odds", "stake", "tips", "draw no bet" or "DNB" at all — say
+  the model's call in plain football words ("Viking not to lose", "over two and a half goals").
 - Refer to a pick as what the model PREDICTS and how confident it is — like sharing a result, not a
   recommendation. The only CTA is to follow the build / see the model's picks at epifanii.com.
 
@@ -491,8 +494,58 @@ def _ensure_comment_gate(voiceover: str, cta_mode: str, offer: str) -> str:
     return f"{voiceover.rstrip()} Oh, and comment {COMMENT_GATE_WORD} and I'll DM you {offer}."
 
 
+def _spoken_call(p: Pick) -> str:
+    """The call in plain football words: market names like "Draw No Bet" and the odds
+    are betting vocabulary the writer would echo into the voiceover."""
+    team = {"H": p.home_team, "A": p.away_team}.get(p.outcome)
+    if p.market == "DNB" and team:
+        return f"{team} not to lose"
+    if p.market.startswith("Result"):
+        return f"{team} to win" if team else "a draw"
+    return p.label
+
+
 def _pick_line(p: Pick) -> str:
-    return f"- {p.match} ({p.league}): {p.label} @ {p.odds} — {p.confidence_pct}% confidence [{p.tier}]"
+    return f"- {p.match} ({p.league}): {_spoken_call(p)} — {p.confidence_pct}% confidence [{p.tier}]"
+
+
+# ── Hard text gates ──────────────────────────────────────────────────────────
+# The LLM critic let "draw no bet", "bet-types" and "Okay, so honestly..." openers
+# through, and TikTok reach collapsed right after. These run in code on every
+# voiceover and caption — the critic can't wave them past.
+_BANNED = re.compile(
+    r"\b(bets?|betting|bettors?|wager\w*|odds|stakes?|staking|tips?|tipsters?|locks?|bankers?|"
+    r"bookies?|bookmakers?|sportsbooks?|parlays?|accas?|accumulators?|dnb|guaranteed|easy money)\b",
+    re.I)
+_PERCENT = re.compile(r"\d\s*(%|percent)", re.I)
+# hashtags glue words together (#bettingtips), so no word boundaries here
+_BANNED_TAG = re.compile(r"bet|odds|tips|tipster|wager|bookie|bookmaker|sportsbook|parlay|dnb|gambl", re.I)
+# a filler only counts when punctuation or another filler follows it, so "So many bugs"
+# or "Okay so you know..." keep their real first word ("so you know" stays)
+_FILLER = r"(?:okay|ok|so|honestly|alright|um|uh|yeah|not gonna lie|confession time)"
+_OPENER_FILLER = re.compile(
+    rf"^(?:{_FILLER}(?:\s*[,.:;!-]+\s*|\s+(?={_FILLER}\b)))+", re.I)
+HOOK_MAX_WORDS = 8
+
+
+def _fix_opener(voiceover: str) -> str:
+    """Strip filler openers ("Okay, so honestly, I wasted..." -> "I wasted...")."""
+    v = _OPENER_FILLER.sub("", voiceover.strip())
+    return v[:1].upper() + v[1:] if v else voiceover.strip()
+
+
+def _hard_problems(voiceover: str) -> str:
+    """'' if the voiceover passes the code gates, else an editor note for the rewrite."""
+    problems = []
+    banned = sorted({m.lower() for m in _BANNED.findall(voiceover)})
+    if banned:
+        problems.append(f"remove the betting words {banned}: say the model's call in plain football "
+                        "words (e.g. 'Viking not to lose', 'over two and a half goals')")
+    hook = re.split(r"(?<=[.!?])\s+", voiceover.strip(), maxsplit=1)[0]
+    if len(hook.split()) > HOOK_MAX_WORDS:
+        problems.append(f"the first sentence is {len(hook.split())} words: the hook must be one "
+                        f"complete sentence of {HOOK_MAX_WORDS} words or fewer that starts with the point")
+    return "; ".join(problems)
 
 
 def _parse_sections(raw: str) -> dict:
@@ -644,24 +697,27 @@ def generate_journey_script(
         contents=f"{_JOURNEY_SYSTEM}\n\n{writer_prompt}",
     )
     sections = _parse_sections(resp.text.strip())
-    voiceover = sections["voiceover"]
+    voiceover = _fix_opener(sections["voiceover"])
     if not voiceover:
         raise ValueError(f"Writer returned no voiceover. Raw output:\n{resp.text}")
 
     # ── Critic → rewrite loop ─────────────────────────────────────
     scores, critique = _critique(client, model, voiceover, milestone=milestone)
     revisions = 0
-    while _needs_rewrite(scores, min_score, min_hook, min_safe, min_trust, min_topic) and revisions < max_revisions:
+    while (_needs_rewrite(scores, min_score, min_hook, min_safe, min_trust, min_topic)
+           or _hard_problems(voiceover)) and revisions < max_revisions:
         print(f"  ✎ Critic: avg {scores['avg']} | hook {scores['hook']} | safe {scores['safe']} "
               f"| trust {scores.get('trust', 10.0)} | topic {scores.get('topic', 10.0)} — "
               f"rewriting ({revisions + 1}/{max_revisions})")
         print(f"    Critique: {critique}")
-        rewrite_prompt = _JOURNEY_REWRITE.format(critique=critique, voiceover=voiceover)
+        hard = _hard_problems(voiceover)
+        rewrite_prompt = _JOURNEY_REWRITE.format(
+            critique=f"{critique} MUST FIX: {hard}" if hard else critique, voiceover=voiceover)
         resp = call_gemini_with_retry(
             client=client, model=model,
             contents=f"{_JOURNEY_SYSTEM}\n\n{rewrite_prompt}",
         )
-        voiceover = resp.text.strip()
+        voiceover = _fix_opener(resp.text.strip())
         scores, critique = _critique(client, model, voiceover, milestone=milestone)
         revisions += 1
 
@@ -677,7 +733,7 @@ def generate_journey_script(
             contents=f"{_JOURNEY_SYSTEM}\n\n"
                      + _JOURNEY_CONDENSE.format(max_words=target_words, voiceover=voiceover),
         )
-        voiceover = resp.text.strip()
+        voiceover = _fix_opener(resp.text.strip())
         condense_passes += 1
     if condense_passes:
         scores, critique = _critique(client, model, voiceover, milestone=milestone)
@@ -685,8 +741,10 @@ def generate_journey_script(
     voiceover = _ensure_comment_gate(voiceover, cta_mode,
                                      "what the model's calling today")
 
-    if _needs_rewrite(scores, min_score, min_hook, min_safe, min_trust, min_topic):
-        raise ScriptQualityError(scores, critique, voiceover, revisions)
+    hard = _hard_problems(voiceover)
+    if hard or _needs_rewrite(scores, min_score, min_hook, min_safe, min_trust, min_topic):
+        raise ScriptQualityError(scores, f"{critique} MUST FIX: {hard}" if hard else critique,
+                                 voiceover, revisions)
 
     return JourneyScript(
         day=day,
@@ -859,23 +917,26 @@ def generate_track_record_script(
         contents=f"{_JOURNEY_SYSTEM}\n\n{writer_prompt}",
     )
     sections = _parse_sections(resp.text.strip())
-    voiceover = sections["voiceover"]
+    voiceover = _fix_opener(sections["voiceover"])
     if not voiceover:
         raise ValueError(f"Writer returned no voiceover. Raw output:\n{resp.text}")
 
     scores, critique = _critique(client, model, voiceover, milestone=topic)
     revisions = 0
-    while _needs_rewrite(scores, min_score, min_hook, min_safe, min_trust, min_topic) and revisions < max_revisions:
+    while (_needs_rewrite(scores, min_score, min_hook, min_safe, min_trust, min_topic)
+           or _hard_problems(voiceover)) and revisions < max_revisions:
         print(f"  ✎ Critic: avg {scores['avg']} | hook {scores['hook']} | safe {scores['safe']} "
               f"| trust {scores.get('trust', 10.0)} | topic {scores.get('topic', 10.0)} — "
               f"rewriting ({revisions + 1}/{max_revisions})")
         print(f"    Critique: {critique}")
-        rewrite_prompt = _JOURNEY_REWRITE.format(critique=critique, voiceover=voiceover)
+        hard = _hard_problems(voiceover)
+        rewrite_prompt = _JOURNEY_REWRITE.format(
+            critique=f"{critique} MUST FIX: {hard}" if hard else critique, voiceover=voiceover)
         resp = call_gemini_with_retry(
             client=client, model=model,
             contents=f"{_JOURNEY_SYSTEM}\n\n{rewrite_prompt}",
         )
-        voiceover = resp.text.strip()
+        voiceover = _fix_opener(resp.text.strip())
         scores, critique = _critique(client, model, voiceover, milestone=topic)
         revisions += 1
 
@@ -888,7 +949,7 @@ def generate_track_record_script(
             contents=f"{_JOURNEY_SYSTEM}\n\n"
                      + _JOURNEY_CONDENSE.format(max_words=target_words, voiceover=voiceover),
         )
-        voiceover = resp.text.strip()
+        voiceover = _fix_opener(resp.text.strip())
         passes += 1
     if passes:
         scores, critique = _critique(client, model, voiceover, milestone=topic)
@@ -896,8 +957,10 @@ def generate_track_record_script(
     voiceover = _ensure_comment_gate(voiceover, cta_mode,
                                      "the model's current calls and its record")
 
-    if _needs_rewrite(scores, min_score, min_hook, min_safe, min_trust, min_topic):
-        raise ScriptQualityError(scores, critique, voiceover, revisions)
+    hard = _hard_problems(voiceover)
+    if hard or _needs_rewrite(scores, min_score, min_hook, min_safe, min_trust, min_topic):
+        raise ScriptQualityError(scores, f"{critique} MUST FIX: {hard}" if hard else critique,
+                                 voiceover, revisions)
 
     return JourneyScript(
         day=project_day(),
@@ -941,7 +1004,31 @@ Per platform:
 Return ONLY a JSON object (no fences):
 {{"tiktok":{{"caption":"...","hashtags":"#a #b"}},"instagram":{{"caption":"...","hashtags":"#a #b"}},"youtube":{{"caption":"...","hashtags":"#a #b"}},"x":{{"caption":"...","hashtags":"#a #b"}}}}"""
 
-_CAPTIONS_CTA_SITE = "Always include epifanii.com."
+_CAPTIONS_CTA_SITE = ("End every caption with where to see the model's calls for free: epifanii.com "
+                      "(on instagram say \"link in bio\"). No match percentages in the tiktok caption.")
+
+# Appended when a site-mode caption lost (or never had) the link. TikTok bio links need
+# 1,000 followers, so TikTok gets the plain domain instead of "link in bio".
+_SITE_CTA = {
+    "tiktok": "the model's calls are free at epifanii.com",
+    "instagram": "The model's calls are free at epifanii.com (link in bio)",
+    "youtube": "The model's calls are free at https://epifanii.com",
+    "x": "free at epifanii.com",
+}
+
+
+def _safe_caption(platform: str, caption: str, hashtags: str, cta_mode: str) -> dict:
+    """Code gate on every caption: drop lines with betting words (and, on TikTok, any
+    percentage), drop betting hashtags, and in site mode make sure the link is there."""
+    lines = [ln for ln in caption.splitlines()
+             if not _BANNED.search(ln) and not (platform == "tiktok" and _PERCENT.search(ln))]
+    tags = " ".join(t for t in hashtags.split() if not _BANNED_TAG.search(t))
+    caption = "\n".join(lines).strip()
+    if cta_mode == "site" and "epifanii.com" not in caption.lower():
+        caption = f"{caption}\n{_SITE_CTA[platform]}".strip()
+    if platform == "youtube" and not lines:  # the first line is the video title
+        caption = f"Building an AI that predicts football\n{caption}"
+    return {"caption": caption, "hashtags": tags}
 
 _CAPTIONS_CTA_COMMENT = (
     'CTA rules: tiktok and instagram captions MUST carry the comment-gate '
@@ -981,9 +1068,9 @@ def platform_captions(script: JourneyScript, cta_mode: str | None = None) -> dic
     on any failure, falls back to the script's base caption/hashtags for every platform.
     """
     base = {"caption": script.caption, "hashtags": script.hashtags}
-    fallback = {p: dict(base) for p in ("tiktok", "instagram", "youtube", "x")}
+    mode = _resolve_cta_mode(cta_mode)
     cta_note = (_CAPTIONS_CTA_COMMENT.format(word=COMMENT_GATE_WORD)
-                if _resolve_cta_mode(cta_mode) == "comment" else _CAPTIONS_CTA_SITE)
+                if mode == "comment" else _CAPTIONS_CTA_SITE)
     try:
         client = _get_client()
         model = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
@@ -993,7 +1080,7 @@ def platform_captions(script: JourneyScript, cta_mode: str | None = None) -> dic
         raw = re.sub(r"^```(?:json)?|```$", "", resp.text.strip(), flags=re.MULTILINE).strip()
         data = json.loads(raw)
     except Exception:
-        return fallback
+        data = {}  # fall back to the base caption — it still goes through the code gate below
     out = {}
     for p in ("tiktok", "instagram", "youtube", "x"):
         v = data.get(p) if isinstance(data, dict) else None
@@ -1002,12 +1089,14 @@ def platform_captions(script: JourneyScript, cta_mode: str | None = None) -> dic
                       "hashtags": str(v.get("hashtags", script.hashtags)).strip()}
         else:
             out[p] = dict(base)
-    if _resolve_cta_mode(cta_mode) == "comment":
+    out = {p: _safe_caption(p, _strip_emoji(c["caption"]), _strip_emoji(c["hashtags"]), mode)
+           for p, c in out.items()}
+    if mode == "comment":
         # The video asks viewers to comment the keyword; on TikTok/IG the caption must too.
         for p in ("tiktok", "instagram"):
             if COMMENT_GATE_WORD.lower() not in out[p]["caption"].lower():
                 out[p]["caption"] += f"\nComment {COMMENT_GATE_WORD} and I'll send you the model's output."
-    return {p: {k: _strip_emoji(v) for k, v in c.items()} for p, c in out.items()}
+    return out
 
 
 def suggest_inserts(voiceover: str, max_cues: int = 4) -> list[dict]:

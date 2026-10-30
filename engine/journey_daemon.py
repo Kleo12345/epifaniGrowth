@@ -332,8 +332,9 @@ def _publish(state: dict) -> None:
         if r["ok"]:
             posted[p] = r["url"]
             if p == "tiktok":
-                lines.append(f"✅ tiktok: draft is in your TikTok inbox — open the app, "
-                             f"paste this caption, tap Post:\n{r['caption']}")
+                lines.append(f"✅ tiktok: draft is in your TikTok inbox — open the app NOW, "
+                             f"paste this caption, tap Post. Never post two days' drafts "
+                             f"back to back: TikTok throttles reach on batched posts.\n{r['caption']}")
             else:
                 lines.append(f"✅ {p}: {r['url'] or 'posted'}")
         else:
