@@ -56,3 +56,8 @@ def test_site_link_added_once_and_percent_allowed_off_tiktok():
 def test_youtube_keeps_a_title_when_every_line_is_dropped():
     out = _safe_caption("youtube", "Draw no bet madness", "", "site")
     assert out["caption"].splitlines()[0] == "Building an AI that predicts football"
+
+
+def test_instagram_link_in_bio_counts_as_the_cta():
+    out = _safe_caption("instagram", "See the record. Link in bio.", "", "site")
+    assert out["caption"] == "See the record. Link in bio."

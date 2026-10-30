@@ -1024,7 +1024,8 @@ def _safe_caption(platform: str, caption: str, hashtags: str, cta_mode: str) -> 
              if not _BANNED.search(ln) and not (platform == "tiktok" and _PERCENT.search(ln))]
     tags = " ".join(t for t in hashtags.split() if not _BANNED_TAG.search(t))
     caption = "\n".join(lines).strip()
-    if cta_mode == "site" and "epifanii.com" not in caption.lower():
+    has_cta = "epifanii.com" in caption.lower() or (platform == "instagram" and "link in bio" in caption.lower())
+    if cta_mode == "site" and not has_cta:
         caption = f"{caption}\n{_SITE_CTA[platform]}".strip()
     if platform == "youtube" and not lines:  # the first line is the video title
         caption = f"Building an AI that predicts football\n{caption}"
