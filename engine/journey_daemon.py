@@ -35,7 +35,7 @@ import os
 import sys
 import threading
 import time
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -60,16 +60,20 @@ from core.script_generator import (
     platform_captions,
     project_day,
 )
+from core import won_tickets
 from core.video_builder import build_journey_video, stop_mpt
-from publishers.upload_post_publisher import refresh_instagram_token
+from publishers.upload_post_publisher import post_instagram_story, refresh_instagram_token
 from tools.push_social import push as push_social
 
 TIMEZONE = "Europe/Athens"
 PROMPT_HOUR, PROMPT_MINUTE = 8, 50
 REPORT_HOUR, REPORT_MINUTE = 22, 30
+TICKETS_HOUR, TICKETS_MINUTE = 8, 0  # after the epifani server grades last night's matches (~07:15 Athens)
 
 STATE_PATH = Path(__file__).resolve().parent / "assets" / "output" / "journey_state.json"
 OFFSET_PATH = Path(__file__).resolve().parent / "assets" / "output" / "telegram_offset.txt"
+# tickets_state.json: {day, paths, posted, disclaimer_month} — see job_won_tickets
+TICKETS_STATE_PATH = Path(__file__).resolve().parent / "assets" / "output" / "tickets_state.json"
 
 
 # ── State ──────────────────────────────────────────────────────────
@@ -361,6 +365,60 @@ def job_nightly_report() -> None:
         tg.send_message(f"⚠️ Tonight's growth report failed: {e}")
 
 
+def _tickets_state() -> dict:
+    return json.loads(TICKETS_STATE_PATH.read_text()) if TICKETS_STATE_PATH.exists() else {}
+
+
+def job_won_tickets() -> None:
+    """08:00 Athens — yesterday's top-5 winning public picks as Story tickets, sent for approval.
+    The first batch of each month opens with the highlight's disclaimer story."""
+    day = (date.today() - timedelta(days=1)).isoformat()
+    st = _tickets_state()
+    if st.get("day") == day:
+        return
+    try:
+        paths, n_picks, n_won = won_tickets.build_day(day)
+    except Exception as e:
+        tg.send_message(f"⚠️ Won tickets for {day} failed: {e}")
+        return
+    new_month = bool(paths) and st.get("disclaimer_month") != day[:7]
+    if new_month:
+        paths.insert(0, won_tickets.build_disclaimer(date.fromisoformat(day)))
+    st.update(day=day, paths=[str(p) for p in paths], posted=[])
+    TICKETS_STATE_PATH.write_text(json.dumps(st, indent=2))
+    if not paths:
+        tg.send_message(f"🎟 No winning public picks on {day} ({n_picks} settled) — no tickets today.")
+        return
+    tg.send_photos(paths, caption=f"🎟 Won tickets {day}: top {len(paths) - new_month} of {n_won}/{n_picks} calls")
+    note = f"\nNew month: start a highlight 'Won tickets · {date.fromisoformat(day):%b %Y}' with the disclaimer first." if new_month else ""
+    tg.send_message(f"Post these {len(paths)} as Instagram Stories?{note}", reply_markup=tg.POST_TICKETS_KEYBOARD)
+
+
+def _post_tickets() -> None:
+    """Post today's tickets that aren't up yet, in order; failures keep a retry button."""
+    st = _tickets_state()
+    if not st.get("paths"):
+        return
+    errors = []
+    for p in st.get("paths", []):
+        if p in st["posted"]:
+            continue
+        try:
+            post_instagram_story(Path(p))
+            st["posted"].append(p)
+        except Exception as e:
+            errors.append(f"{Path(p).name}: {e}")
+            break  # keep the order: stop at the first failure, retry resumes here
+    if any("disclaimer_" in p for p in st["posted"]):
+        st["disclaimer_month"] = st["day"][:7]
+    TICKETS_STATE_PATH.write_text(json.dumps(st, indent=2))
+    msg = f"📤 {len(st['posted'])}/{len(st['paths'])} stories posted."
+    if errors:
+        tg.send_message(f"{msg}\n✗ {errors[0]}", reply_markup=tg.POST_TICKETS_KEYBOARD)
+    else:
+        tg.send_message(f"{msg} Add them to this month's highlight in the app.")
+
+
 def job_push_social() -> None:
     """Every 30 min: channel views/followers to the Bot Dashboard's Social tab."""
     try:
@@ -388,8 +446,12 @@ def handle_update(update: dict) -> None:
             return
         tg.answer_callback(cq["id"])
 
-        state = _today_state()
         data = cq.get("data")
+        if data == "post_tickets":  # independent of the video's daily state
+            tg.edit_reply_markup(cq["message"]["message_id"])
+            _post_tickets()
+            return
+        state = _today_state()
         if data == "retry_post" and state["status"] == "approved":
             tg.edit_reply_markup(cq["message"]["message_id"])
             _publish(state)
@@ -459,6 +521,12 @@ def run() -> None:
         job_nightly_report,
         CronTrigger(hour=REPORT_HOUR, minute=REPORT_MINUTE, timezone=TIMEZONE),
         id="nightly_report",
+        misfire_grace_time=None,
+    )
+    scheduler.add_job(
+        job_won_tickets,
+        CronTrigger(hour=TICKETS_HOUR, minute=TICKETS_MINUTE, timezone=TIMEZONE),
+        id="won_tickets",
         misfire_grace_time=None,
     )
     # Retry net: re-runs the (idempotent) catch-up so a day that crashed back to idle,

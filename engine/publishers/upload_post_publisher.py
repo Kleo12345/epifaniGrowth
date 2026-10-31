@@ -196,6 +196,30 @@ def _post_instagram(video_path: Path, caption: str) -> str:
     return post_id
 
 
+def post_instagram_story(image_path: Path) -> str:
+    """Publish one JPEG as an Instagram Story. Highlights can't be set through the API;
+    add the story to the month's highlight in the app."""
+    headers = {"Authorization": f"Bearer {os.environ['INSTAGRAM_ACCESS_TOKEN']}"}
+    resp = requests.post(f"{IG_GRAPH}/me/media", headers=headers, timeout=30,
+                         data={"media_type": "STORIES", "image_url": _temp_public_url(image_path)})
+    if not resp.ok:
+        raise RuntimeError(f"Instagram story container failed: {resp.text[:300]}")
+    container_id = resp.json()["id"]
+    for _ in range(12):
+        status = requests.get(f"{IG_GRAPH}/{container_id}", headers=headers,
+                              params={"fields": "status_code"}, timeout=20).json().get("status_code")
+        if status == "FINISHED":
+            break
+        if status == "ERROR":
+            raise RuntimeError("Instagram failed to process the story image.")
+        time.sleep(5)
+    pub = requests.post(f"{IG_GRAPH}/me/media_publish", headers=headers,
+                        data={"creation_id": container_id}, timeout=30)
+    if not pub.ok:
+        raise RuntimeError(f"Instagram story publish failed: {pub.text[:300]}")
+    return pub.json()["id"]
+
+
 def _post_tiktok(video_path: Path, caption: str) -> str:
     """Upload video to TikTok via official Content Posting API or note that it is saved locally for manual upload."""
     access_token = tiktok_access_token()

@@ -24,6 +24,9 @@ RETRY_KEYBOARD = {
 RETRY_POST_KEYBOARD = {
     "inline_keyboard": [[{"text": "📤 Retry failed platforms", "callback_data": "retry_post"}]]
 }
+POST_TICKETS_KEYBOARD = {
+    "inline_keyboard": [[{"text": "📤 Post as Instagram Stories", "callback_data": "post_tickets"}]]
+}
 
 
 def is_configured() -> bool:
@@ -64,6 +67,25 @@ def send_video(path: str, caption: str, reply_markup: dict | None = None) -> dic
         data["reply_markup"] = json.dumps(reply_markup)
     with open(path, "rb") as f:
         r = requests.post(_url("sendVideo"), data=data, files={"video": f}, timeout=180)
+    r.raise_for_status()
+    return r.json()["result"]
+
+
+def send_photos(paths: list, caption: str = "") -> list[dict]:
+    """One album (Telegram allows 2-10 items; a single path falls back to sendPhoto)."""
+    files = {f"p{i}": open(p, "rb") for i, p in enumerate(paths)}
+    try:
+        if len(paths) == 1:
+            r = requests.post(_url("sendPhoto"), timeout=120, files={"photo": files["p0"]},
+                              data={"chat_id": own_chat_id(), "caption": caption[:1024]})
+        else:
+            media = [{"type": "photo", "media": f"attach://p{i}"} for i in range(len(paths))]
+            media[0]["caption"] = caption[:1024]
+            r = requests.post(_url("sendMediaGroup"), timeout=120, files=files,
+                              data={"chat_id": own_chat_id(), "media": json.dumps(media)})
+    finally:
+        for f in files.values():
+            f.close()
     r.raise_for_status()
     return r.json()["result"]
 
