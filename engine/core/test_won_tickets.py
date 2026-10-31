@@ -31,6 +31,17 @@ def test_day_results_top_winners_by_odds(tmp_path, monkeypatch):
     assert (n_picks, n_won) == (8, 7)  # the void doesn't count as a call
 
 
+def test_one_league_cannot_take_every_slot(tmp_path, monkeypatch):
+    base = dict(date="2026-10-30", homeTeam="a", awayTeam="b", market="Result (1/X/2)",
+                prediction="H", result="Win")
+    rows = [{**base, "id": f"fr{i}", "league": "Ligue-1-France-01", "odds": 3.0 - i / 10} for i in range(6)]
+    rows += [{**base, "id": "at", "league": "Bundesliga-Austria-01", "odds": 1.4},
+             {**base, "id": "us", "league": "MLS-USA-01", "odds": 1.6}]
+    monkeypatch.setattr(w, "_track_record_module", lambda: _fake_tracker(tmp_path, rows))
+    top, _, _ = w.day_results("2026-10-30")
+    assert [p["id"] for p in top] == ["fr0", "fr1", "fr2", "us", "at"]  # 3 leagues, odds order
+
+
 def test_stake_is_stable_and_in_range():
     assert w.stake_for("abc") == w.stake_for("abc")
     assert {w.stake_for(str(i)) for i in range(200)} <= set(w.STAKES)

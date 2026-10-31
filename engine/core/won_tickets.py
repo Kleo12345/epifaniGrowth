@@ -45,7 +45,10 @@ def day_results(day: str) -> tuple[list[dict], int, int]:
         return [], 0, 0
     picks = picks[(picks.date == day) & (picks.result != "Void")]
     wins = picks[picks.result == "Win"].sort_values("odds", ascending=False)
-    return wins.head(TOP_N).to_dict("records"), len(picks), len(wins)
+    # Best-odds winner per league first, then fill by odds, so one busy league can't take every slot.
+    per_league = wins.drop_duplicates("league")
+    top = pd.concat([per_league, wins.drop(per_league.index)]).head(TOP_N)
+    return top.sort_values("odds", ascending=False).to_dict("records"), len(picks), len(wins)
 
 
 def stake_for(pick_id: str) -> int:
