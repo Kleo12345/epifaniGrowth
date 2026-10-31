@@ -71,23 +71,25 @@ def send_video(path: str, caption: str, reply_markup: dict | None = None) -> dic
     return r.json()["result"]
 
 
-def send_photos(paths: list, caption: str = "") -> list[dict]:
-    """One album (Telegram allows 2-10 items; a single path falls back to sendPhoto)."""
-    files = {f"p{i}": open(p, "rb") for i, p in enumerate(paths)}
-    try:
-        if len(paths) == 1:
-            r = requests.post(_url("sendPhoto"), timeout=120, files={"photo": files["p0"]},
-                              data={"chat_id": own_chat_id(), "caption": caption[:1024]})
-        else:
-            media = [{"type": "photo", "media": f"attach://p{i}"} for i in range(len(paths))]
-            media[0]["caption"] = caption[:1024]
-            r = requests.post(_url("sendMediaGroup"), timeout=120, files=files,
-                              data={"chat_id": own_chat_id(), "media": json.dumps(media)})
-    finally:
-        for f in files.values():
-            f.close()
-    r.raise_for_status()
-    return r.json()["result"]
+def send_photos(paths: list, caption: str = "") -> None:
+    """Albums of up to 10 (Telegram's limit); a lone photo goes via sendPhoto. Caption on the first."""
+    for start in range(0, len(paths), 10):
+        chunk = paths[start:start + 10]
+        cap = caption[:1024] if start == 0 else ""
+        files = {f"p{i}": open(p, "rb") for i, p in enumerate(chunk)}
+        try:
+            if len(chunk) == 1:
+                r = requests.post(_url("sendPhoto"), timeout=120, files={"photo": files["p0"]},
+                                  data={"chat_id": own_chat_id(), "caption": cap})
+            else:
+                media = [{"type": "photo", "media": f"attach://p{i}"} for i in range(len(chunk))]
+                media[0]["caption"] = cap
+                r = requests.post(_url("sendMediaGroup"), timeout=120, files=files,
+                                  data={"chat_id": own_chat_id(), "media": json.dumps(media)})
+        finally:
+            for f in files.values():
+                f.close()
+        r.raise_for_status()
 
 
 def edit_reply_markup(message_id: int, reply_markup: dict | None = None) -> dict:

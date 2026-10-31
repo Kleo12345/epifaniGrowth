@@ -374,8 +374,9 @@ def job_won_tickets() -> None:
     The first batch of each month opens with the highlight's disclaimer story."""
     day = (date.today() - timedelta(days=1)).isoformat()
     st = _tickets_state()
-    if st.get("day") == day:
-        return
+    if st.get("day") == day or st.get("recap_month") == day[:7]:
+        return  # done, or that month's recap already covers it
+
     try:
         paths, n_picks, n_won = won_tickets.build_day(day)
     except Exception as e:
@@ -392,6 +393,24 @@ def job_won_tickets() -> None:
     tg.send_photos(paths, caption=f"🎟 Won tickets {day}: top {len(paths) - new_month} of {n_won}/{n_picks} calls")
     note = f"\nNew month: start a highlight 'Won tickets · {date.fromisoformat(day):%b %Y}' with the disclaimer first." if new_month else ""
     tg.send_message(f"Post these {len(paths)} as Instagram Stories?{note}", reply_markup=tg.POST_TICKETS_KEYBOARD)
+
+
+def send_month_recap(month: str) -> None:
+    """One-off, e.g. send_month_recap("2026-10"): the month's best singles and doubles for its
+    highlight, behind the same Post button. Days of that month get no daily batch afterwards."""
+    paths = won_tickets.build_recap(month)
+    if not paths:
+        tg.send_message(f"🎟 No winning public picks in {month}.")
+        return
+    first = date.fromisoformat(f"{month}-01")
+    st = _tickets_state()
+    if st.get("disclaimer_month") != month:
+        paths.insert(0, won_tickets.build_disclaimer(first))
+    st.update(day=f"{month}-recap", paths=[str(p) for p in paths], posted=[], recap_month=month)
+    TICKETS_STATE_PATH.write_text(json.dumps(st, indent=2))
+    tg.send_photos(paths, caption=f"🎟 {first:%B} recap: {len(paths)} stories")
+    tg.send_message(f"Post these {len(paths)} as Instagram Stories? Then add them to the highlight "
+                    f"'Won tickets · {first:%b %Y}', disclaimer first.", reply_markup=tg.POST_TICKETS_KEYBOARD)
 
 
 def _post_tickets() -> None:
