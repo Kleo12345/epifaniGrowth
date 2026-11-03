@@ -2,8 +2,8 @@
 "Won tickets" for Instagram Stories: winning public picks drawn as betting-slip
 style cards with an example stake.
 
-Daily: yesterday's top singles (highest odds, one per league first) plus the best
-same-match double (the match's 1X2 call and its Over/Under call both landed).
+Daily: yesterday's top singles (odds weighted by league fame, one per league first)
+plus the best same-match double (the match's 1X2 call and its Over/Under call both landed).
 Monthly recap: the month's top singles and doubles in one batch.
 
 Picks come from the Epifani engine's own tracker through the same Core3 filter
@@ -32,6 +32,16 @@ RECAP_SINGLES, RECAP_DOUBLES = 10, 3
 # Amounts people actually type into a slip, not uniform noise.
 STAKES = [20, 25, 30, 40, 50, 60, 75, 100, 120, 150, 200, 250, 300, 400, 500]
 W, H, PAD = 1080, 1920, 80
+# Odds multiplier: a win in a league people follow convinces more than a slightly bigger
+# one nobody watches. At 1.5 a 2.00 in the Premier League outranks anything under 3.00
+# from an unlisted league. Tune here; keys are league ids without the "-01" suffix.
+LEAGUE_FAME = {
+    **dict.fromkeys(["Premier-League-England", "La-Liga-Spain", "Serie-A-Italy",
+                     "Bundesliga-1-Germany", "Ligue-1-France"], 1.5),
+    **dict.fromkeys(["Serie-B-Italy", "Championship-England", "Liga-1-Portugal",
+                     "Eredivisie-Netherlands", "Super-Lig-Turkey", "Serie-A-Brazil",
+                     "Primera-Division-Argentina", "MLS-USA", "Liga-MX-Mexico"], 1.2),
+}
 
 
 def _track_record_module():
@@ -50,16 +60,22 @@ def settled_picks() -> pd.DataFrame:
     return picks if picks.empty else picks[picks.result != "Void"]
 
 
+def fame(league: str) -> float:
+    return LEAGUE_FAME.get(league.removesuffix("-01"), 1.0)
+
+
 def top_singles(picks: pd.DataFrame, n: int) -> list[dict]:
-    """Winners by odds, best per league first so one busy league can't take every slot."""
-    wins = picks[picks.result == "Win"].sort_values("odds", ascending=False)
+    """Winners by fame-weighted odds, best per league first so one busy league can't take
+    every slot."""
+    wins = picks[picks.result == "Win"]
+    wins = wins.assign(score=wins.odds * wins.league.map(fame)).sort_values("score", ascending=False)
     per_league = wins.drop_duplicates("league")
     top = pd.concat([per_league, wins.drop(per_league.index)]).head(n)
-    return top.sort_values("odds", ascending=False).to_dict("records")
+    return top.sort_values("score", ascending=False).drop(columns="score").to_dict("records")
 
 
 def doubles(picks: pd.DataFrame) -> list[dict]:
-    """Same-match doubles, best odds first: the match's 1X2 call and O/U call, both won.
+    """Same-match doubles, best fame-weighted odds first: the match's 1X2 call and O/U call, both won.
     DNB is left out: with the 1X2 call on the same match it's nearly the same bet twice."""
     out = []
     for (day, home, away), m in picks.groupby(["date", "homeTeam", "awayTeam"]):
@@ -69,7 +85,7 @@ def doubles(picks: pd.DataFrame) -> list[dict]:
             out.append({"id": f"double_{legs[0]['id']}", "date": day, "league": legs[0]["league"],
                         "homeTeam": home, "awayTeam": away, "legs": legs,
                         "odds": legs[0]["odds"] * legs[1]["odds"]})
-    return sorted(out, key=lambda d: -d["odds"])
+    return sorted(out, key=lambda d: -d["odds"] * fame(d["league"]))
 
 
 def day_record(picks: pd.DataFrame, day: str) -> tuple[int, int]:

@@ -39,6 +39,15 @@ def test_one_league_cannot_take_every_slot():
     assert [p["id"] for p in top] == ["fr0", "fr1", "fr2", "us", "at"]  # 3 leagues, odds order
 
 
+def test_famous_league_outranks_bigger_odds_elsewhere():
+    rows = [{**BASE, "id": "se", "league": "Allsvenskan-Sweden-01", "odds": 2.9},
+            {**BASE, "id": "pl", "league": "Premier-League-England-01", "odds": 2.0},
+            {**BASE, "id": "it", "league": "Serie-A-Italy", "odds": 2.1},  # id has no -01 suffix
+            {**BASE, "id": "at", "league": "Bundesliga-Austria-01", "odds": 3.1}]
+    assert [p["id"] for p in w.top_singles(pd.DataFrame(rows), 3)] == ["it", "at", "pl"]
+    assert w.fame("Serie-A-Italy") == w.fame("Premier-League-England-01") == 1.5
+
+
 def test_doubles_need_both_legs_won_and_skip_dnb():
     ou = dict(market="U/O-2.5", prediction="O")
     rows = [{**BASE, "id": "a1", "odds": 2.0}, {**BASE, **ou, "id": "a2", "odds": 1.5},       # both won
