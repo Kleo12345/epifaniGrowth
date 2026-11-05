@@ -93,3 +93,11 @@ def test_tickets_render_as_story_jpeg(tmp_path):
     leg2 = {**p, "id": "x2", "market": "U/O-2.5", "prediction": "O", "odds": 1.8}
     dbl = {**p, "id": "double_x", "legs": [{**p, "market": "Result (1/X/2)"}, leg2], "odds": 2.55 * 1.8}
     assert Image.open(w.build_ticket(dbl, 33, 20, out_dir=tmp_path)).size == (1080, 1920)
+
+
+def test_day_with_no_wins_or_no_picks_builds_nothing(tmp_path, monkeypatch):
+    # Regression: a day without a winner crashed the job, so no batch and no "no tickets" note.
+    rows = [{**BASE, "id": "loss", "odds": 2.0, "result": "Loss"}]
+    monkeypatch.setattr(w, "_track_record_module", lambda: _fake_tracker(tmp_path, rows))
+    assert w.build_day("2026-10-30") == ([], 1, 0)  # played, none won
+    assert w.build_day("2026-10-31") == ([], 0, 0)  # nothing played

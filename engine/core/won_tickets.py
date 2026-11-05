@@ -68,6 +68,8 @@ def top_singles(picks: pd.DataFrame, n: int) -> list[dict]:
     """Winners by fame-weighted odds, best per league first so one busy league can't take
     every slot."""
     wins = picks[picks.result == "Win"]
+    if wins.empty:  # an empty league.map() comes back as strings, and odds * strings raises
+        return []
     wins = wins.assign(score=wins.odds * wins.league.map(fame)).sort_values("score", ascending=False)
     per_league = wins.drop_duplicates("league")
     top = pd.concat([per_league, wins.drop(per_league.index)]).head(n)
@@ -253,6 +255,8 @@ def build_disclaimer(month: date, out_dir: Path = TICKETS_DIR) -> Path:
 
 def _pick_tickets(picks: pd.DataFrame, total: int, max_doubles: int) -> list[dict]:
     """Up to max_doubles doubles, the rest singles from other matches (no match shown twice)."""
+    if picks.empty:  # picks[[]] below would select zero columns, not zero rows
+        return []
     dbl = doubles(picks)[:max_doubles]
     taken = {(d["date"], d["homeTeam"], d["awayTeam"]) for d in dbl}
     rest = picks[[k not in taken for k in zip(picks.date, picks.homeTeam, picks.awayTeam)]]
