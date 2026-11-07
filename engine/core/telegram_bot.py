@@ -7,8 +7,11 @@ bot needs. Long-polling via getUpdates, no webhook server required.
 """
 import json
 import os
+import re
+from typing import Callable
 
 import requests
+
 
 _API = "https://api.telegram.org/bot{token}/{method}"
 
@@ -48,17 +51,58 @@ def _url(method: str) -> str:
     return _API.format(token=_token(), method=method)
 
 
+# ---- Token redaction --------------------------------------------------------
+
+_TOKEN_PATTERN = re.compile(r"bot\d+:[A-Za-z0-9_-]+")
+
+
+def _redact(text: str) -> str:
+    """Replace any Telegram bot token in text with '<redacted>'."""
+    if not text:
+        return text
+    token = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
+    if token:
+        text = text.replace(token, "<redacted>")
+    # Fallback: catch any bot<token> pattern in URLs or error messages
+    return _TOKEN_PATTERN.sub("bot<redacted>", text)
+
+
+class TelegramError(requests.RequestException):
+    """Raised when a Telegram API call fails. Message is always redacted.
+    Does not chain the original exception (from None), and does not attach
+    response/request objects whose .url would leak the token.
+    """
+    def __init__(self, message: str, status_code: int | None = None):
+        super().__init__(message)
+        self.status_code = status_code
+
+
+def _call(http_method: Callable, method: str, *, check: bool = True, **kwargs) -> requests.Response:
+    """Internal helper: perform the request and redact any error."""
+    try:
+        r = http_method(_url(method), **kwargs)
+        if check:
+            r.raise_for_status()
+        return r
+    except requests.RequestException as e:
+        status = e.response.status_code if e.response is not None else None
+        raise TelegramError(_redact(str(e)), status) from None
+
+
+# ---- Public API -------------------------------------------------------------
+
 def send_message(text: str, reply_markup: dict | None = None) -> dict:
     """Long texts are split into 4000-char messages (Telegram's limit is 4096);
     the keyboard goes on the last one."""
     chunks = [text[i:i + 4000] for i in range(0, len(text), 4000)] or [""]
+    last_response = None
     for i, chunk in enumerate(chunks):
         payload = {"chat_id": own_chat_id(), "text": chunk}
         if reply_markup and i == len(chunks) - 1:
             payload["reply_markup"] = reply_markup
-        r = requests.post(_url("sendMessage"), json=payload, timeout=30)
-        r.raise_for_status()
-    return r.json()["result"]
+        r = _call(requests.post, "sendMessage", json=payload, timeout=30)
+        last_response = r
+    return last_response.json()["result"]
 
 
 def send_video(path: str, caption: str, reply_markup: dict | None = None) -> dict:
@@ -66,8 +110,7 @@ def send_video(path: str, caption: str, reply_markup: dict | None = None) -> dic
     if reply_markup:
         data["reply_markup"] = json.dumps(reply_markup)
     with open(path, "rb") as f:
-        r = requests.post(_url("sendVideo"), data=data, files={"video": f}, timeout=180)
-    r.raise_for_status()
+        r = _call(requests.post, "sendVideo", data=data, files={"video": f}, timeout=180)
     return r.json()["result"]
 
 
@@ -79,13 +122,13 @@ def send_photos(paths: list, caption: str = "") -> None:
         files = {f"p{i}": open(p, "rb") for i, p in enumerate(chunk)}
         try:
             if len(chunk) == 1:
-                r = requests.post(_url("sendPhoto"), timeout=120, files={"photo": files["p0"]},
-                                  data={"chat_id": own_chat_id(), "caption": cap})
+                r = _call(requests.post, "sendPhoto", timeout=120, files={"photo": files["p0"]},
+                          data={"chat_id": own_chat_id(), "caption": cap})
             else:
                 media = [{"type": "photo", "media": f"attach://p{i}"} for i in range(len(chunk))]
                 media[0]["caption"] = cap
-                r = requests.post(_url("sendMediaGroup"), timeout=120, files=files,
-                                  data={"chat_id": own_chat_id(), "media": json.dumps(media)})
+                r = _call(requests.post, "sendMediaGroup", timeout=120, files=files,
+                          data={"chat_id": own_chat_id(), "media": json.dumps(media)})
         finally:
             for f in files.values():
                 f.close()
@@ -98,8 +141,7 @@ def edit_reply_markup(message_id: int, reply_markup: dict | None = None) -> dict
         "message_id": message_id,
         "reply_markup": reply_markup or {"inline_keyboard": []},
     }
-    r = requests.post(_url("editMessageReplyMarkup"), json=payload, timeout=30)
-    r.raise_for_status()
+    r = _call(requests.post, "editMessageReplyMarkup", json=payload, timeout=30)
     return r.json()
 
 
@@ -107,13 +149,14 @@ def answer_callback(callback_id: str, text: str | None = None) -> None:
     payload = {"callback_query_id": callback_id}
     if text:
         payload["text"] = text
-    requests.post(_url("answerCallbackQuery"), json=payload, timeout=30)
+    # check=False keeps current behaviour: no raise on bad HTTP status,
+    # but connection/timeout errors are still redacted via _call
+    _call(requests.post, "answerCallbackQuery", json=payload, timeout=30, check=False)
 
 
 def get_updates(offset: int | None = None, timeout: int = 30) -> list[dict]:
     params = {"timeout": timeout}
     if offset is not None:
         params["offset"] = offset
-    r = requests.get(_url("getUpdates"), params=params, timeout=timeout + 10)
-    r.raise_for_status()
+    r = _call(requests.get, "getUpdates", params=params, timeout=timeout + 10)
     return r.json()["result"]
