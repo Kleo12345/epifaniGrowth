@@ -132,7 +132,6 @@ def send_photos(paths: list, caption: str = "") -> None:
         finally:
             for f in files.values():
                 f.close()
-        r.raise_for_status()
 
 
 def edit_reply_markup(message_id: int, reply_markup: dict | None = None) -> dict:
