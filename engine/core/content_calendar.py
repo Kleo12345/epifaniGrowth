@@ -96,57 +96,91 @@ _ENTRIES = [
          "The ELO data fetcher used to hang forever on a team it didn't recognize"),
     _day(20, "human", "CONFESSION", 3,
          "Found out my own backtest numbers were wrong — missing probability columns for "
-         "four bet types, for who knows how long"),
+         "four bet types, for who knows how long",
+         note="Keep the topic's own wording. Say the backtest was missing probability columns; "
+              "do not name the bet types, give dates, or say which component had the bug."),
     _day(21, "proof", "FLEX", 1, _RECORD_TOPIC, "+ reply to a comment"),
 
     # Week 4 — The Quant Leap (technical dial turns up here)
     _day(22, "tech", "CURIOSITY", 3,
-         "What \"Kelly Criterion\" is — sizing a bet by how sure you actually are, not a "
-         "flat amount"),
+         "What \"Kelly Criterion\" is — how a model could size a position by how sure it is, "
+         "not a flat amount",
+         note="Kelly fraction = (p x odds - 1) / (odds - 1) with decimal odds, where p is the "
+              "model's probability. This is not the 'edge' the site publishes (that one is "
+              "p - 1/odds). A made-up illustration only, and say it is made up: 55% at odds 2.0 "
+              "gives 10%. Explain the intuition as a modelling idea, never as betting advice: "
+              "no 'you should', no bankroll talk."),
     _day(23, "build", "STAKES", 3,
-         "Built a portfolio optimizer that sizes six strategies against each other at once"),
+         "Built a portfolio optimizer that sizes six strategies against each other at once",
+         note="Explain the idea: sizing several strategies together instead of as six separate "
+              "bets. Do not invent the method, the strategies' names, weights, correlation "
+              "figures or results."),
     _day(24, "tech", "CURIOSITY", 3,
          "What \"walk-forward optimization\" is — testing a strategy like you'd have "
-         "actually lived it"),
+         "actually lived it",
+         note="Contrast it with one backtest over all history. Show the rolling window: train "
+              "on a stretch, test on the next one, roll forward. If you use example months "
+              "(train Jan-Mar, test Apr), say they are only an example. No maths notation."),
     _day(25, "human", "CONFESSION", 4,
          "The optimizer started picking suspiciously lucky outliers instead of real edges. "
-         "Had to rein it in"),
+         "Had to rein it in",
+         note="Say only that it was reined in, as the topic says; name no specific guardrail. "
+              "Do not invent dates, trade counts, weight limits or metric names."),
     _day(26, "tech", "STAKES", 4,
-         "Teaching the model to be honest about its own confidence — calibration"),
+         "Teaching the model to be honest about its own confidence — calibration",
+         note="Explain calibration plainly: when the model says 55%, does it win about 55% of "
+              "the time? Group picks into probability bands and compare. Quote no results; the "
+              "check is being built. If the site's average edge comes up, say it averages only "
+              "the picks where the model saw a positive edge, so it cannot be compared with the "
+              "overall return. Never promise calibration will fix the record."),
     _day(27, "human", "CONFESSION", 2,
-         "\"Reverted a big problem\" — the day something broke badly enough to just undo everything"),
+         "\"Reverted a big problem\" — the day something broke badly enough to just undo everything",
+         note="Do not invent what broke, how long it took or what it cost."),
     _day(28, "proof", "FLEX", 1, _RECORD_TOPIC, "+ reply to a comment"),
 
     # Week 5 — The Machinery, Up Close (interlude: the self-monitoring system)
     _day(29, "tech", "CURIOSITY", 3,
-         "AutoML — letting the computer search for its own best settings instead of me guessing"),
+         "AutoML — letting the computer search for its own best settings instead of me guessing",
+         note="Do not name AutoML tools or quote results."),
     _day(30, "tech", "CURIOSITY", 3,
          "Specialist stacking — dozens of models each focused on one bet type, blended by "
-         "a referee model"),
+         "a referee model",
+         note="Do not invent model counts or bet-type names."),
     _day(31, "build", "STAKES", 3,
-         "Built a health system that watches the model itself and can trigger its own retraining"),
+         "Built a health system that watches the model itself and can trigger its own retraining",
+         note="Do not name specific health metrics or retraining triggers."),
     _day(32, "human", "CONFESSION", 2,
          "A real commit message from that week, word for word: \"I think I fixed the "
-         "autonomous health system, but we have to test it first\""),
+         "autonomous health system, but we have to test it first\"",
+         note="Quote only this commit message; do not invent other messages or the outcome."),
     _day(33, "human", "CONFESSION", 2,
-         "Shipped a fix that made things worse. Reverted it, guarded against it differently instead"),
+         "Shipped a fix that made things worse. Reverted it, guarded against it differently instead",
+         note="Do not name the specific fix or what it broke."),
     _day(34, "build", "CURIOSITY", 2,
-         "Built a 3D map of how my own codebase connects, just to understand my own system"),
+         "Built a 3D map of how my own codebase connects, just to understand my own system",
+         note="Do not name the visualisation tool or quote graph numbers."),
     _day(35, "proof", "FLEX", 1, _RECORD_TOPIC, "+ reply to a comment"),
 
     # Week 6 — The Present (forward-looking, closes the arc)
     _day(36, "tech", "CURIOSITY", 3,
-         "What \"closing line value\" is, and why it matters more than a single win or loss"),
+         "What \"closing line value\" is, and why it matters more than a single win or loss",
+         note="Explain the idea; claim no closing-line figure for the model."),
     _day(37, "proof", "FLEX", 2,
-         "Built a scoreboard that shows what's actually working, market by market"),
-    _day(38, "build", "STRUGGLE", 1, "Whatever's actually true that day"),
+         "Built a scoreboard that shows what's actually working, market by market",
+         note="Show the idea of the scoreboard; quote no market's results or numbers."),
+    _day(38, "build", "STRUGGLE", 1, "Whatever's actually true that day",
+         note="Keep it honest and general; do not invent a specific struggle."),
     _day(39, "proof", "FLEX", 1, _RECORD_TOPIC),
-    _day(40, "proof", "CURIOSITY", 1, "Answering the most-asked question so far"),
-    _day(41, "human", "CONFESSION", 2, "Whatever's actually true that day"),
-    _day(42, "tech", "CURIOSITY", 2, "A tease of what's next for the model"),
+    _day(40, "proof", "CURIOSITY", 1, "Answering the most-asked question so far",
+         note="Do not invent a question or claim how often it was asked."),
+    _day(41, "human", "CONFESSION", 2, "Whatever's actually true that day",
+         note="Keep it honest and general; do not invent a specific confession."),
+    _day(42, "tech", "CURIOSITY", 2, "A tease of what's next for the model",
+         note="Promise no specific feature, result or date."),
     _day(43, "proof", "FLEX", 1, _RECORD_TOPIC),
     _day(44, "build", "FLEX", 1,
-         "Six weeks of talking about it publicly — what actually changed"),
+         "Six weeks of talking about it publicly — what actually changed",
+         note="Quote no follower counts or record numbers."),
 ]
 
 PLAN_A_PLUS: dict[int, dict] = {e["day"]: e for e in _ENTRIES}
