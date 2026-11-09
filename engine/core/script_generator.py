@@ -779,7 +779,8 @@ Only include a moment if a visual genuinely helps. Return 0 to {max_cues} items.
 
 _TRACK_WRITER = """Write a talk-to-camera voiceover (TikTok/Reels/Short) where the founder shares how his
 AI model has actually been performing. This is a "receipts / track record" video — the whole point is
-HONEST proof the thing works, framed as data from a system he built. NOT a betting tip, NOT a sales pitch.
+HONEST receipts: the real numbers, good and bad, framed as data from a system he built. NOT a betting tip,
+NOT a sales pitch.
 
 THE MODEL'S RECORD (real numbers — use them, don't invent any):
 {stats_block}
@@ -842,7 +843,12 @@ def _perf_stats_block(perf: dict) -> str:
             pass
     edge = _fmt_pct(perf.get("avgEdge"))
     if edge:
-        lines.append(f"- Average edge the model flagged on its value picks: +{edge}.")
+        sign = "+" if float(perf.get("avgEdge")) > 0 else ""
+        lines.append(f"- Average edge the model flagged on its value picks: {sign}{edge} "
+                     "(this averages only the picks where it saw a positive edge, not every pick).")
+    roi_line = _roi_line(perf)
+    if roi_line:
+        lines.append(roi_line)
     for name in ("elite", "high", "strong"):
         t = (perf.get("tiers") or {}).get(name) or {}
         r, tn = _fmt_pct(t.get("rate")), t.get("n")
@@ -850,6 +856,33 @@ def _perf_stats_block(perf: dict) -> str:
         if r and isinstance(tn, (int, float)) and tn >= 5:
             lines.append(f"- {name.capitalize()}-tier picks: {r} over {tn}.")
     return "\n".join(lines) if lines else "- (no settled picks yet)"
+
+
+def _roi_line(perf: dict) -> str | None:
+    """The flat-stake return over the same window: the number a record video must not hide.
+
+    roi is units / (won + lost + voids) from the portal's stats route, so it covers every settled
+    pick with voids included at zero return (a larger count than the hit-rate sample, which skips voids).
+    """
+    try:
+        roi = float(perf.get("roi"))
+    except (TypeError, ValueError):
+        return None
+    if roi != roi:  # NaN
+        return None
+    line = (f"- Return at a flat 1-unit stake on every settled pick in that window, voids included"
+            f" at zero return: {roi * 100:+.1f}% ROI")
+    try:
+        line += f" ({float(perf.get('units')):+.2f} units)."
+    except (TypeError, ValueError):
+        line += "."
+    if roi < 0:
+        line += (" (MENTION this plainly: the record is negative over this window. Do not say or imply"
+                 " it will turn positive, and do not let the hit rate or a tier stand in for it.)")
+    else:
+        line += (" (MENTION it as one window's result. Never call the model profitable in general and"
+                 " never imply it will continue.)")
+    return line
 
 
 def _winners_block(winners: list[dict]) -> str:
