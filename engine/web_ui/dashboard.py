@@ -484,7 +484,7 @@ if run_all:
                         "caption": (
                             f"{v['pick'].match} — {v['pick'].label} @ {v['pick'].odds} | "
                             f"{v['pick'].confidence_pct}% AI Confidence\n"
-                            f"epifanii.com/?utm_source=tiktok&utm_medium=social #football #AI"
+                            f"epifanii.com/register?utm_source=tiktok&utm_medium=social #football #AI"
                         ),
                         "match": v["pick"].match,
                     }
@@ -503,7 +503,7 @@ if run_all:
                         "caption": (
                             f"{v['pick'].match} — {v['pick'].label} @ {v['pick'].odds} | "
                             f"{v['pick'].confidence_pct}% AI Confidence\n"
-                            f"epifanii.com/?utm_source=youtube&utm_medium=social #football #AI"
+                            f"epifanii.com/register?utm_source=youtube&utm_medium=social #football #AI"
                         ),
                         "match": v["pick"].match,
                     }
@@ -643,7 +643,7 @@ with st.expander(t("advanced_title")):
                             "caption": (
                                 f"{p.match} — {p.label} @ {p.odds} | "
                                 f"{p.confidence_pct}% AI Confidence\n"
-                                f"epifanii.com/?utm_source=tiktok&utm_medium=social #football #AI"
+                                f"epifanii.com/register?utm_source=tiktok&utm_medium=social #football #AI"
                             ),
                             "match": p.match,
                         })
@@ -680,7 +680,7 @@ with st.expander(t("advanced_title")):
                             "caption": (
                                 f"{p.match} — {p.label} @ {p.odds} | "
                                 f"{p.confidence_pct}% AI Confidence\n"
-                                f"epifanii.com/?utm_source=youtube&utm_medium=social #football #AI"
+                                f"epifanii.com/register?utm_source=youtube&utm_medium=social #football #AI"
                             ),
                             "match": p.match,
                         })

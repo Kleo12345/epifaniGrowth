@@ -27,14 +27,15 @@ def test_live_block_states_negative_roi():
     assert "(-41.47 units)" in block, block
     assert "negative over this window" in block, block
     assert "Misses in that window: 278 of the 537" in block, block
-    assert "+2% (this averages only the picks where it saw a positive edge" in block, block
+    assert "Average edge as published on the site: +2% (a pick-time estimate" in block, block
+    assert "positive edge" not in block, block  # the definition changed (portal avgEdge = all picks)
     assert "Elite-tier picks: 85% over 26" in block, block
 
 
 def test_negative_edge_has_no_plus_minus():
     block = sg._perf_stats_block(dict(LIVE, avgEdge=-0.015))
     assert "+-" not in block, block
-    assert "-2% (this averages only" in block, block
+    assert "published on the site: -2% (a pick-time estimate" in block, block
 
 
 def test_positive_roi_wording():

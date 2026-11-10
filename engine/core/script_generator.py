@@ -116,7 +116,7 @@ Return ONLY the 3 tweets separated by the delimiter "---TWEET---". No numbering,
         confidence_pct = pick.confidence_pct,
         edge_pct       = round(pick.edge * 100, 1),
         tier           = pick.tier,
-        cta_url        = pick.cta_url,
+        cta_url        = pick.cta_link(os.getenv("UTM_SOURCE", "twitter")),  # tweets: X traffic
         story_hook     = story_hook,
     )
 
@@ -844,8 +844,10 @@ def _perf_stats_block(perf: dict) -> str:
     edge = _fmt_pct(perf.get("avgEdge"))
     if edge:
         sign = "+" if float(perf.get("avgEdge")) > 0 else ""
-        lines.append(f"- Average edge the model flagged on its value picks: {sign}{edge} "
-                     "(this averages only the picks where it saw a positive edge, not every pick).")
+        # Neutral on purpose: the portal's avgEdge changed from "positive-edge picks only" to
+        # "all picks with a valid edge", and this must stay true on both sides of that deploy.
+        lines.append(f"- Average edge as published on the site: {sign}{edge} "
+                     "(a pick-time estimate, not a realised return: never set it against the record's returns).")
     roi_line = _roi_line(perf)
     if roi_line:
         lines.append(roi_line)
@@ -896,6 +898,27 @@ def _winners_block(winners: list[dict]) -> str:
     return "Recent winning calls (optional colour, don't list all):\n" + "\n".join(rows)
 
 
+# Record days carry a calendar note (e.g. the follow reason for tomorrow's video). It may
+# shape the ending and a viewer question, but every number in a record video must come from
+# the live stats block. Digits are redacted from the note in code, so even a note that
+# quotes an old figure cannot leak it into the prompt as a statistic.
+_NOTE_NUMBER = re.compile(r"\d+(?:[.,]\d+)*(?:\s*(?:%|percent\b))?", re.I)
+
+
+def _clean_calendar_note(note: str | None) -> str:
+    text = " ".join((note or "").split())
+    return _NOTE_NUMBER.sub("[figure removed]", text)
+
+
+def _calendar_note_block(note: str | None) -> str:
+    text = _clean_calendar_note(note)
+    if not text:
+        return ""
+    return ("\n\nTODAY'S CALENDAR DIRECTION (use it only for the closing follow reason and any "
+            "viewer question. It supplies NO figures: every number you say must come from THE "
+            f"MODEL'S RECORD above, never from this direction): {text}")
+
+
 def generate_track_record_script(
     perf: dict,
     winners: list[dict] | None = None,
@@ -908,6 +931,7 @@ def generate_track_record_script(
     max_revisions: int = 2,
     cta_mode: str | None = None,
     revision_note: str | None = None,
+    calendar_note: str | None = None,
 ) -> JourneyScript:
     """Generate a "Model Track Record" video script from the portal's performance data.
 
@@ -916,6 +940,9 @@ def generate_track_record_script(
     cta_mode      : "site" (link CTA, default) or "comment" (comment-gate → DM).
     revision_note : optional founder feedback from a prior take (e.g. from the Telegram
                     Regenerate flow) — folded into the writer prompt as a rewrite note.
+    calendar_note : optional note of today's calendar day (journey_daemon passes it on record
+                    days) so the video can speak its follow reason. Numbers in it are redacted;
+                    the record numbers come only from `perf`.
     Same critic/hook/safe/topic gates as the journey script; reuses the JourneyScript shape.
     """
     if not perf or not perf.get("sample"):
@@ -933,6 +960,10 @@ def generate_track_record_script(
     # The critic's "ground truth" for a record check-in is the real stats themselves,
     # not an invented story — same topic-fidelity check as a calendar milestone.
     topic = f"Weekly track-record check-in using the model's real performance stats:\n{stats_block}"
+    note_text = _clean_calendar_note(calendar_note)
+    if note_text:
+        topic += ("\nThe calendar also asks for this closing line (allowed direction, not a "
+                  f"statistic): {note_text}")
 
     writer_prompt = _TRACK_WRITER.format(
         stats_block=stats_block,
@@ -943,6 +974,7 @@ def generate_track_record_script(
         cta_direction=_cta_direction(cta_mode, "the model's current calls and its full record"),
         caption_rule=_caption_rule(cta_mode),
     )
+    writer_prompt += _calendar_note_block(calendar_note)
     if revision_note and revision_note.strip():
         writer_prompt += f"\n\nFOUNDER'S REVISION NOTE — apply this feedback in the rewrite: {revision_note.strip()}"
     resp = call_gemini_with_retry(
@@ -1037,16 +1069,26 @@ Per platform:
 Return ONLY a JSON object (no fences):
 {{"tiktok":{{"caption":"...","hashtags":"#a #b"}},"instagram":{{"caption":"...","hashtags":"#a #b"}},"youtube":{{"caption":"...","hashtags":"#a #b"}},"x":{{"caption":"...","hashtags":"#a #b"}}}}"""
 
-_CAPTIONS_CTA_SITE = ("End every caption with where to see the model's calls for free: epifanii.com "
-                      "(on instagram say \"link in bio\"). No match percentages in the tiktok caption.")
+_CAPTIONS_CTA_SITE = ("End every caption with where to see the model's calls for free: epifanii.com/register "
+                      "(on instagram say \"link in bio\" instead of the link). No match percentages in the tiktok caption.")
+
+# G3 (free sign-ups): TikTok/YouTube/X captions point straight at the register page.
+# A bare "epifanii.com" / "https://epifanii.com[/]" in those captions is rewritten to the
+# register URL (scheme/www prefix kept); an existing path ("/register", "/?utm...") is left
+# alone. Instagram keeps "link in bio". Voice-over text is never touched by this.
+# Left boundary: not glued to a word, "@", "." or "-", so "x@epifanii.com", "sub.epifanii.com"
+# and "myepifanii.com" are NOT rewritten. Right side: "epifanii.com." (sentence end) is
+# rewritten, but "epifanii.com.au" (a different host) is not.
+_SITE_LINK = re.compile(
+    r"(?<![\w@.-])((?:https?://)?(?:www\.)?)epifanii\.com/?(?![\w/?#-]|\.\w)", re.I)
 
 # Appended when a site-mode caption lost (or never had) the link. TikTok bio links need
 # 1,000 followers, so TikTok gets the plain domain instead of "link in bio".
 _SITE_CTA = {
-    "tiktok": "the model's calls are free at epifanii.com",
+    "tiktok": "the model's calls are free at epifanii.com/register",
     "instagram": "The model's calls are free at epifanii.com (link in bio)",
-    "youtube": "The model's calls are free at https://epifanii.com",
-    "x": "free at epifanii.com",
+    "youtube": "The model's calls are free at https://epifanii.com/register",
+    "x": "free at epifanii.com/register",
 }
 
 
@@ -1057,7 +1099,11 @@ def _safe_caption(platform: str, caption: str, hashtags: str, cta_mode: str) -> 
              if not _BANNED.search(ln) and not (platform == "tiktok" and _PERCENT.search(ln))]
     tags = " ".join(t for t in hashtags.split() if not _BANNED_TAG.search(t))
     caption = "\n".join(lines).strip()
-    has_cta = "epifanii.com" in caption.lower() or (platform == "instagram" and "link in bio" in caption.lower())
+    if platform == "instagram":  # bio link or bare domain both count as the CTA
+        has_cta = "epifanii.com" in caption.lower() or "link in bio" in caption.lower()
+    else:  # tiktok / youtube / x: the CTA is the register page, not the bare domain
+        caption = _SITE_LINK.sub(r"\g<1>epifanii.com/register", caption)
+        has_cta = "epifanii.com/register" in caption.lower()
     if cta_mode == "site" and not has_cta:
         caption = f"{caption}\n{_SITE_CTA[platform]}".strip()
     if platform == "youtube" and not lines:  # the first line is the video title
@@ -1067,7 +1113,7 @@ def _safe_caption(platform: str, caption: str, hashtags: str, cta_mode: str) -> 
 _CAPTIONS_CTA_COMMENT = (
     'CTA rules: tiktok and instagram captions MUST carry the comment-gate '
     '("comment {word}" → DM with the model\'s output) and NO link (the DM is the delivery). '
-    "youtube and x have no comment-to-DM flow, so those two include epifanii.com instead of the gate."
+    "youtube and x have no comment-to-DM flow, so those two include epifanii.com/register instead of the gate."
 )
 
 
