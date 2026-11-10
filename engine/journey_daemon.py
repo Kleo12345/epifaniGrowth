@@ -198,8 +198,13 @@ def _build_and_send(state: dict) -> None:
             perf, winners = None, []
             print(f"  ⚠ fetch_performance/fetch_recent_winners failed: {e}")
         try:
+            # Record days speak their calendar note too (the follow reason). The note is read
+            # from the calendar by day, so a Regenerate on a later boot still finds it. Record
+            # numbers still come only from the live stats inside generate_track_record_script.
+            record_note = (calendar_entry(state.get("calendar_day") or 0) or {}).get("note")
             script = _until_gate_clears(lambda: generate_track_record_script(
                 perf, winners, hook_style=hook_style, revision_note=feedback or "",
+                calendar_note=record_note,
             ))
         except ValueError as e:
             state["status"] = "error"

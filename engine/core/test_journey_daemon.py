@@ -158,7 +158,7 @@ def demo():
     jd.fetch_recent_winners = lambda: []
     record_calls = []
 
-    def fake_track_record(perf, winners, hook_style=None, revision_note=""):
+    def fake_track_record(perf, winners, hook_style=None, revision_note="", calendar_note=None):
         record_calls.append((perf, revision_note))
         return types.SimpleNamespace(day=14, caption="record caption", voiceover="hi")
 

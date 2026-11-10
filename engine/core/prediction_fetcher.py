@@ -84,9 +84,14 @@ class Pick:
 
     @property
     def cta_url(self) -> str:
-        source = os.getenv("UTM_SOURCE", "twitter")
-        # utm_* (not ?ref=) so PostHog records it as the visitor's first-touch source
-        return f"epifanii.com/?utm_source={source}&utm_medium=social"
+        # A Pick knows no platform, so the default source is the fixed label "video" (set
+        # UTM_SOURCE to override). Callers that do know the platform use cta_link(platform).
+        return self.cta_link(os.getenv("UTM_SOURCE", "video"))
+
+    def cta_link(self, source: str) -> str:
+        # G3: straight to the sign-up page. utm_* (not ?ref=) so PostHog records it as the
+        # visitor's first-touch source.
+        return f"epifanii.com/register?utm_source={source}&utm_medium=social"
 
 
 def _tier(probability: float) -> tuple[str, str]:

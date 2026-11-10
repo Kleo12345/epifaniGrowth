@@ -249,7 +249,9 @@ def build_card(pick: Pick, size: str = "square") -> Path:
     draw = ImageDraw.Draw(img)
 
     draw.text((PAD, foot_y + 16), "DISCOVER THE EDGE AT", font=_font(19), fill=MUTED)
-    _shadow_text(draw, (PAD, foot_y + 46), pick.cta_url.upper(), _font(30), CYAN)
+    # The card shows the bare path: the utm query would add ~35 characters at 30px and is
+    # never clicked from an image anyway.
+    _shadow_text(draw, (PAD, foot_y + 46), pick.cta_url.split("?")[0].upper(), _font(30), CYAN)
 
     # ── Save ──────────────────────────────────────────────────────
     safe = pick.match.replace(" ", "_").replace("/", "-")
