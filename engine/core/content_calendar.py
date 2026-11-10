@@ -99,7 +99,9 @@ _ENTRIES = [
          "four bet types, for who knows how long",
          note="Keep the topic's own wording. Say the backtest was missing probability columns; "
               "do not name the bet types, give dates, or say which component had the bug."),
-    _day(21, "proof", "FLEX", 1, _RECORD_TOPIC, "+ reply to a comment"),
+    _day(21, "proof", "FLEX", 1, _RECORD_TOPIC,
+         "End with a follow reason: tomorrow's video on how a model sizes its confidence. "
+         "Ask one question viewers can answer in one word: hit rate or ROI?"),
 
     # Week 4 — The Quant Leap (technical dial turns up here)
     _day(22, "tech", "CURIOSITY", 3,
@@ -109,44 +111,68 @@ _ENTRIES = [
               "model's probability. This is not the 'edge' the site publishes (that one is "
               "p - 1/odds). A made-up illustration only, and say it is made up: 55% at odds 2.0 "
               "gives 10%. Explain the intuition as a modelling idea, never as betting advice: "
-              "no 'you should', no bankroll talk."),
+              "no 'you should', no bankroll talk. "
+              "End with a follow reason: tomorrow, sizing several strategies together instead of "
+              "one at a time. "
+              "Ask one question viewers can answer in one word: flat or Kelly?"),
     _day(23, "build", "STAKES", 3,
          "Built a portfolio optimizer that sizes six strategies against each other at once",
          note="Explain the idea: sizing several strategies together instead of as six separate "
               "bets. Do not invent the method, the strategies' names, weights, correlation "
-              "figures or results."),
+              "figures or results. "
+              "End with a follow reason: tomorrow, how a strategy is tested the way it would "
+              "actually have been lived. "
+              "Ask one question viewers can answer in one word: higher or lower risk?"),
     _day(24, "tech", "CURIOSITY", 3,
          "What \"walk-forward optimization\" is — testing a strategy like you'd have "
          "actually lived it",
          note="Contrast it with one backtest over all history. Show the rolling window: train "
               "on a stretch, test on the next one, roll forward. If you use example months "
-              "(train Jan-Mar, test Apr), say they are only an example. No maths notation."),
+              "(train Jan-Mar, test Apr), say they are only an example. No maths notation. "
+              "End with a follow reason: tomorrow, the day the optimizer started trusting lucky "
+              "outliers. "
+              "Ask one question viewers can answer in one word: how many years of history would "
+              "you test on?"),
     _day(25, "human", "CONFESSION", 4,
          "The optimizer started picking suspiciously lucky outliers instead of real edges. "
          "Had to rein it in",
          note="Say only that it was reined in, as the topic says; name no specific guardrail. "
-              "Do not invent dates, trade counts, weight limits or metric names."),
+              "Do not invent dates, trade counts, weight limits or metric names. "
+              "End with a follow reason: tomorrow, teaching the model to be honest about its own "
+              "confidence. "
+              "Ask one question viewers can answer in one word: luck or skill?"),
     _day(26, "tech", "STAKES", 4,
          "Teaching the model to be honest about its own confidence — calibration",
          note="Explain calibration plainly: when the model says 55%, does it win about 55% of "
               "the time? Group picks into probability bands and compare. Quote no results; the "
-              "check is being built. If the site's average edge comes up, say it averages only "
-              "the picks where the model saw a positive edge, so it cannot be compared with the "
-              "overall return. Never promise calibration will fix the record."),
+              "check is being built. If the site's average edge comes up, say it is a different "
+              "measure from the overall return and the two cannot be compared directly. Never "
+              "promise calibration will fix the record. "
+              "End with a follow reason: tomorrow, the day something broke badly enough to undo "
+              "everything. "
+              "Ask one question viewers can answer in one word: would you trust a 55% call that "
+              "only wins 45%?"),
     _day(27, "human", "CONFESSION", 2,
          "\"Reverted a big problem\" — the day something broke badly enough to just undo everything",
-         note="Do not invent what broke, how long it took or what it cost."),
+         note="Do not invent what broke, how long it took or what it cost. "
+              "End with a follow reason: tomorrow, the weekly record check-in. "
+              "Ask one question viewers can answer in one word: revert or fix?"),
     _day(28, "proof", "FLEX", 1, _RECORD_TOPIC,
          "Quote only the live numbers pulled for today; never numbers from an earlier week. "
-         "End with a follow reason: next week's record check-in, same numbers, good or bad."),
+         "End with a follow reason: next week's record check-in, same numbers, good or bad. "
+         "Ask one question viewers can answer in one word: better or worse?"),
 
     # Week 5 — The Machinery, Up Close (interlude: the self-monitoring system)
     _day(29, "tech", "CURIOSITY", 3,
          "AutoML — letting the computer search for its own best settings instead of me guessing",
-         note="Do not name AutoML tools or quote results."),
+         note="Do not name AutoML tools or quote results. "
+              "End with a follow reason: tomorrow, the committee of specialist models. "
+              "Ask one question viewers can answer in one word: search or pick?"),
     _day(30, "tech", "CURIOSITY", 3,
          "My model isn't one brain — it's specialist models voting, blended by a referee",
-         note="Do not invent model counts or bet-type names."),
+         note="Do not invent model counts or bet-type names. "
+              "End with a follow reason: tomorrow, the model watching its own health. "
+              "Ask one question viewers can answer in one word: one or many?"),
     _day(31, "build", "STAKES", 3,
          "The model now watches its own health and triggers its own retraining",
          note="Do not name specific health metrics or retraining triggers."),
