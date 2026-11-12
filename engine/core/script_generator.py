@@ -416,9 +416,12 @@ def _resolve_cta_mode(cta_mode: str | None) -> str:
     return mode if mode in CTA_MODES else "site"
 
 
-def _cta_direction(cta_mode: str, offer: str) -> str:
+def _cta_direction(cta_mode: str, offer: str, question: str | None = None) -> str:
     """The writer prompt's ending direction. `offer` is what the DM delivers
     (worded per format: today's model output vs. the model's record)."""
+    if question:
+        return (f'- End on this exact viewer question, asked in your own spoken words, and STOP '
+                f'there: "{question}". Nothing after it: no website line, no comment-gate, no link.')
     if cta_mode == "comment":
         return (f'- End with a comment-gate, tossed off like an afterthought, not salesy: they comment '
                 f'the word "{COMMENT_GATE_WORD}" and you\'ll DM them {offer}. One casual line (e.g. '
@@ -482,12 +485,17 @@ def _critic_punish_block() -> str:
             f"line resembles any of them in shape or energy, cap the hook score at 6:\n{lines}\n")
 
 
-def _ensure_comment_gate(voiceover: str, cta_mode: str, offer: str) -> str:
+def _ensure_comment_gate(voiceover: str, cta_mode: str, offer: str,
+                         question: str | None = None) -> str:
     """Final pass on every voiceover. Strips markdown emphasis (*word*, `word`) the
     writer sometimes adds — it would be burned into the subtitles. In comment mode the
     keyword IS the mechanic — if a rewrite/condense pass dropped it, append a natural
     gate line so the funnel never silently breaks."""
     voiceover = re.sub(r"[*`]", "", voiceover)
+    if question:
+        # Question mode: the question IS the ending, so no gate line is appended.
+        voiceover = voiceover.rstrip()
+        return voiceover if voiceover.endswith("?") else f"{voiceover} {question}"
     if cta_mode != "comment" or COMMENT_GATE_WORD.lower() in voiceover.lower():
         return voiceover
     print(f"  ⚠ Comment-gate keyword '{COMMENT_GATE_WORD}' missing after revisions — appending gate line.")
@@ -646,6 +654,7 @@ def generate_journey_script(
     cta_mode: str | None = None,
     content_frame: str | None = None,
     target_secs: int = 35,
+    calendar_note: str | None = None,
 ) -> JourneyScript:
     """Generate a first-person Founder's Journey voiceover script, vetted by an LLM critic.
 
@@ -665,11 +674,14 @@ def generate_journey_script(
                     falls back to env CTA_MODE.
     content_frame : optional one-line steer on how to treat `milestone` (e.g. an explainer
                     vs. a confession) — see content_calendar.CONTENT_FRAME_BY_FAM.
+    calendar_note : optional calendar note of the day. Only a viewer question in it is used
+                    (it becomes the spoken ending); the rest of the note is not passed on.
     """
     if not milestone or not milestone.strip():
         raise ValueError("A daily milestone is required to generate a journey script.")
 
     cta_mode = _resolve_cta_mode(cta_mode)
+    question = _note_question(calendar_note)
     day = project_day()
     proof = picks[:proof_picks]
     picks_block = "\n".join(_pick_line(p) for p in proof) if proof else "- (no qualifying picks today)"
@@ -689,8 +701,9 @@ def generate_journey_script(
         target_secs=target_secs,
         target_words=target_words,
         hook_style=_hook_direction(hook_style),
-        cta_direction=_cta_direction(cta_mode, "today's model output (the pick and its confidence)"),
-        caption_rule=_caption_rule(cta_mode),
+        cta_direction=_cta_direction(cta_mode, "today's model output (the pick and its confidence)",
+                                     question=question),
+        caption_rule=_caption_rule("site" if question else cta_mode),
     )
     resp = call_gemini_with_retry(
         client=client, model=model,
@@ -739,7 +752,7 @@ def generate_journey_script(
         scores, critique = _critique(client, model, voiceover, milestone=milestone)
 
     voiceover = _ensure_comment_gate(voiceover, cta_mode,
-                                     "what the model's calling today")
+                                     "what the model's calling today", question=question)
 
     hard = _hard_problems(voiceover)
     if hard or _needs_rewrite(scores, min_score, min_hook, min_safe, min_trust, min_topic):
@@ -910,6 +923,24 @@ def _clean_calendar_note(note: str | None) -> str:
     return _NOTE_NUMBER.sub("[figure removed]", text)
 
 
+_NOTE_QUESTION = re.compile(r"[^.!?]*\?")
+
+
+def _note_question(note: str | None) -> str:
+    """The viewer question the calendar note asks, or "" when none is safe to speak.
+    Numbers are already redacted, so a question that carried a figure is skipped; so is
+    one with a banned word (it would only fail _hard_problems and burn the whole take).
+    "" means the normal ending."""
+    for raw in reversed(_NOTE_QUESTION.findall(_clean_calendar_note(note))):
+        q = raw.split(":")[-1].strip()
+        if not 8 <= len(q) <= 160 or "[figure removed]" in q or q.lower().startswith("ask "):
+            continue
+        if _BANNED.search(q):
+            continue
+        return q[0].upper() + q[1:]
+    return ""
+
+
 def _calendar_note_block(note: str | None) -> str:
     text = _clean_calendar_note(note)
     if not text:
@@ -949,6 +980,7 @@ def generate_track_record_script(
         raise ValueError("No performance data (empty sample) to build a track-record script.")
 
     cta_mode = _resolve_cta_mode(cta_mode)
+    question = _note_question(calendar_note)
     target_secs = 30
     target_words = round(target_secs * WORDS_PER_SEC)
     hook_style = hook_style or random.choice(HOOK_STYLES)
@@ -971,8 +1003,9 @@ def generate_track_record_script(
         target_secs=target_secs,
         target_words=target_words,
         hook_style=_hook_direction(hook_style),
-        cta_direction=_cta_direction(cta_mode, "the model's current calls and its full record"),
-        caption_rule=_caption_rule(cta_mode),
+        cta_direction=_cta_direction(cta_mode, "the model's current calls and its full record",
+                                     question=question),
+        caption_rule=_caption_rule("site" if question else cta_mode),
     )
     writer_prompt += _calendar_note_block(calendar_note)
     if revision_note and revision_note.strip():
@@ -1020,7 +1053,8 @@ def generate_track_record_script(
         scores, critique = _critique(client, model, voiceover, milestone=topic)
 
     voiceover = _ensure_comment_gate(voiceover, cta_mode,
-                                     "the model's current calls and its record")
+                                     "the model's current calls and its record",
+                                     question=question)
 
     hard = _hard_problems(voiceover)
     if hard or _needs_rewrite(scores, min_score, min_hook, min_safe, min_trust, min_topic):
