@@ -39,7 +39,7 @@ def _caption(pick) -> str:
     return (
         f"{pick.match} — {pick.label} @ {pick.odds} | "
         f"{pick.confidence_pct}% AI Confidence\n\n"
-        f"Get all picks free → epifanii.com/register?utm_source=tiktok&utm_medium=social #football #betting #AI"
+        f"See the model's calls free → epifanii.com/register?utm_source=tiktok&utm_medium=social #football #AI"
     )
 
 

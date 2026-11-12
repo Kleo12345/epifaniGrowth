@@ -219,6 +219,8 @@ def _build_and_send(state: dict) -> None:
         picks = []
     else:
         milestone = state["milestone"]
+        # Normal journey days speak the viewer question of their calendar note too.
+        journey_note = (calendar_entry(state.get("calendar_day") or 0) or {}).get("note")
         if feedback:
             milestone = f"{milestone}\n\n(Revision note for this take: {feedback})"
         try:
@@ -231,6 +233,7 @@ def _build_and_send(state: dict) -> None:
                 picks, milestone=milestone, hook_style=hook_style,
                 content_frame=CONTENT_FRAME_BY_FAM.get(state.get("fam")),
                 target_secs=state.get("secs") or 35,
+                calendar_note=journey_note,
             ))
         except ScriptQualityError as e:
             _report_quality_failure(state, e)
