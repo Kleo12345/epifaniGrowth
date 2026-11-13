@@ -136,25 +136,26 @@ _ENTRIES = [
     _day(25, "human", "CONFESSION", 4,
          "The optimizer started picking suspiciously lucky outliers instead of real edges. "
          "Had to rein it in",
-         note="Say only that it was reined in, as the topic says; name no specific guardrail. "
+         note="First sentence: the lucky-outlier problem in plain words, before any context. "
+              "Say only that it was reined in, as the topic says; name no specific guardrail. "
               "Do not invent dates, trade counts, weight limits or metric names. "
               "End with a follow reason: tomorrow, teaching the model to be honest about its own "
               "confidence. "
               "Ask one question viewers can answer in one word: luck or skill?"),
     _day(26, "tech", "STAKES", 4,
          "Teaching the model to be honest about its own confidence — calibration",
-         note="Explain calibration plainly: when the model says 55%, does it win about 55% of "
-              "the time? Group picks into probability bands and compare. Quote no results; the "
-              "check is being built. If the site's average edge comes up, say it is a different "
-              "measure from the overall return and the two cannot be compared directly. Never "
+         note="Explain calibration plainly: check whether a call the model rates at 55% wins about "
+              "55% of the time. Group picks into probability bands and compare. Quote no results; "
+              "the check is being built. Do not cite the site's average edge or any tier. Never "
               "promise calibration will fix the record. "
               "End with a follow reason: tomorrow, the day something broke badly enough to undo "
               "everything. "
-              "Ask one question viewers can answer in one word: would you trust a 55% call that "
-              "only wins 45%?"),
+              "Ask one question viewers can answer in one word: would you trust a forecaster who is "
+              "always sure but usually wrong?"),
     _day(27, "human", "CONFESSION", 2,
          "\"Reverted a big problem\" — the day something broke badly enough to just undo everything",
-         note="Do not invent what broke, how long it took or what it cost. "
+         note="First sentence: something broke badly enough to undo everything, before any "
+              "context. Do not invent what broke, how long it took or what it cost. "
               "End with a follow reason: tomorrow, the weekly record check-in. "
               "Ask one question viewers can answer in one word: revert or fix?"),
     _day(28, "proof", "FLEX", 1, _RECORD_TOPIC,
@@ -165,7 +166,8 @@ _ENTRIES = [
     # Week 5 — The Machinery, Up Close (interlude: the self-monitoring system)
     _day(29, "tech", "CURIOSITY", 3,
          "AutoML — letting the computer search for its own best settings instead of me guessing",
-         note="Do not name AutoML tools or quote results. "
+         note="First sentence: the question it answers, who picks the settings, me or the "
+              "computer, before any context. Do not name AutoML tools or quote results. "
               "End with a follow reason: tomorrow, the committee of specialist models. "
               "Ask one question viewers can answer in one word: search or pick?"),
     _day(30, "tech", "CURIOSITY", 3,
@@ -175,17 +177,32 @@ _ENTRIES = [
               "Ask one question viewers can answer in one word: one or many?"),
     _day(31, "build", "STAKES", 3,
          "The model now watches its own health and triggers its own retraining",
-         note="Do not name specific health metrics or retraining triggers."),
+         note="Do not name specific health metrics or retraining triggers. "
+              "End with a follow reason: tomorrow, the real commit message from that week, "
+              "word for word. "
+              "Ask one question viewers can answer in one word: would you let a program fix itself "
+              "while you sleep?"),
     _day(32, "human", "CONFESSION", 2,
          "A real commit message from that week, word for word: \"I think I fixed the "
          "autonomous health system, but we have to test it first\"",
-         note="Quote only this commit message; do not invent other messages or the outcome."),
+         note="Quote only this commit message; do not invent other messages or the outcome. "
+              "End with a follow reason: tomorrow, the fix that made the model worse and the "
+              "guard that replaced it. "
+              "Ask one question viewers can answer in one word: have you ever shipped something "
+              "before testing it?"),
     _day(33, "human", "CONFESSION", 2,
          "A fix I shipped made the model worse. Reverted it, added a guard instead",
-         note="Do not name the specific fix or what it broke."),
+         note="Do not name the specific fix or what it broke. "
+              "End with a follow reason: tomorrow, a map of the codebase showing how the "
+              "model's parts connect. "
+              "Ask one question viewers can answer in one word: have you ever fixed something and "
+              "made it worse?"),
     _day(34, "build", "CURIOSITY", 2,
          "Mapped the codebase in 3D to see how the model's parts actually connect",
-         note="Do not name the visualisation tool or quote graph numbers."),
+         note="Do not name the visualisation tool or quote graph numbers. "
+              "End with a follow reason: tomorrow, the weekly record check-in. "
+              "Ask one question viewers can answer in one word: do you trust things more when you "
+              "can see how they work?"),
     _day(35, "proof", "FLEX", 1, _RECORD_TOPIC,
          "Quote only the live numbers pulled for today; never numbers from an earlier week. "
          "End with a follow reason: next week's record check-in, same numbers, good or bad."),
@@ -201,20 +218,34 @@ _ENTRIES = [
          note="Show the idea of the scoreboard; quote no market's results or numbers. End with a "
               "follow reason: the weekly record check-ins."),
     _day(38, "build", "STRUGGLE", 1,
-         "Whatever's actually true that day",
-         note="Keep it honest and general; do not invent a specific struggle. Open on the "
-              "problem in 8 words or fewer and explain one concrete part of the system."),
+         "An honest finding in plain words: the model says it is roughly six in ten sure of "
+         "its calls, and it lands under half of them. The first fix did not pass its own test",
+         note="Say it in words only, no digits and no figures. The model states roughly six in "
+              "ten confidence and its calls land under half. The first attempt to fix that "
+              "did not pass its own test; say so plainly. Never claim it makes money. Never "
+              "promise a fix or a result. Never name any tier or average edge. Open on the "
+              "problem in eight words or fewer and explain one concrete part of the system: "
+              "the gap between stated confidence and what happened. "
+              "End with a follow reason: tomorrow, the weekly record check-in. "
+              "Ask one question viewers can answer in one word: would you trust a forecaster who "
+              "admits they are overconfident?"),
     _day(39, "proof", "FLEX", 1, _RECORD_TOPIC,
          "Quote only the live numbers pulled for today; never numbers from an earlier week. "
          "End with a follow reason: next week's record check-in, same numbers, good or bad."),
     _day(40, "proof", "CURIOSITY", 1,
          "Why the model stays silent on some match days",
-         note="No viewer question exists yet, so do not present this as a viewer's question. "
-              "Explain that it only shares calls above its confidence bar, so some days have "
-              "none. Name no threshold value."),
+         note="Explain that it only shares calls above its confidence bar, so some days have "
+              "none. Name no threshold value. "
+              "End with a follow reason: tomorrow, one more honest confession from the build. "
+              "Ask one question viewers can answer in one word: would you rather be told nothing "
+              "than be given a guess?"),
     _day(41, "human", "CONFESSION", 2,
          "Whatever's actually true that day",
-         note="Keep it honest and general; do not invent a specific confession."),
+         note="Keep it honest and general; do not invent a specific confession. "
+              "End with a follow reason: tomorrow, a look at what could come next for the "
+              "model, with no promises. "
+              "Ask one question viewers can answer in one word: do you like it when people admit "
+              "what went wrong?"),
     _day(42, "tech", "CURIOSITY", 2,
          "A tease of what's next for the model",
          note="Promise no specific feature, result or date. End with a follow reason: see what "
