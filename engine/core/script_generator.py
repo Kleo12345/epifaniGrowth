@@ -542,9 +542,23 @@ def _fix_opener(voiceover: str) -> str:
     return v[:1].upper() + v[1:] if v else voiceover.strip()
 
 
-def _hard_problems(voiceover: str) -> str:
-    """'' if the voiceover passes the code gates, else an editor note for the rewrite."""
+# Record videos only: the two phrases that read as a win next to a negative ROI.
+_RECORD_FORBIDDEN = re.compile(r"\baverage[\s-]+edge\b|\belite\b", re.I)
+
+
+def _hard_problems(voiceover: str, caption: str = "", record: bool = False) -> str:
+    """'' if the voiceover passes the code gates, else an editor note for the rewrite.
+
+    record=True (weekly record check-in) also rejects 'average edge' and the word 'elite' in the
+    voiceover or in `caption` (the caption is not rewritten by the loop: a hit there fails the script).
+    """
     problems = []
+    if record:
+        for where, text in (("voiceover", voiceover), ("caption", caption)):
+            hits = sorted({m.group(0).lower() for m in _RECORD_FORBIDDEN.finditer(text or "")})
+            if hits:
+                problems.append(f"remove {hits} from the {where}: a record video never mentions the "
+                                "average edge or the elite tier (they read as a win next to a negative return)")
     banned = sorted({m.lower() for m in _BANNED.findall(voiceover)})
     if banned:
         problems.append(f"remove the betting words {banned}: say the model's call in plain football "
@@ -854,22 +868,30 @@ def _perf_stats_block(perf: dict) -> str:
                          "(MENTION this — showing the losses is what separates us from the scam accounts.)")
         except (TypeError, ValueError):
             pass
-    edge = _fmt_pct(perf.get("avgEdge"))
-    if edge:
-        sign = "+" if float(perf.get("avgEdge")) > 0 else ""
-        # Neutral on purpose: the portal's avgEdge changed from "positive-edge picks only" to
-        # "all picks with a valid edge", and this must stay true on both sides of that deploy.
-        lines.append(f"- Average edge as published on the site: {sign}{edge} "
-                     "(a pick-time estimate, not a realised return: never set it against the record's returns).")
+    # No average-edge line on purpose: the site's avgEdge was computed on positive-edge picks only
+    # and read as a win next to a negative ROI. Do not restore it until the portal fix is live and
+    # a human has re-read it against the record. perf["avgEdge"] is intentionally never used here.
     roi_line = _roi_line(perf)
     if roi_line:
         lines.append(roi_line)
-    for name in ("elite", "high", "strong"):
+    # "elite" is left out on purpose: it was spoken as proof on Day 21 ("85 percent over 26 calls")
+    # and its rate rests on a small, recalibrated sample. _hard_problems also rejects the word in a
+    # record script or caption. Do not add it back without a human re-reading it against the record.
+    for name in ("high", "strong"):
         t = (perf.get("tiers") or {}).get(name) or {}
         r, tn = _fmt_pct(t.get("rate")), t.get("n")
         # skip statistically-thin tiers ("100% over 1" is misleading + risky)
         if r and isinstance(tn, (int, float)) and tn >= 5:
-            lines.append(f"- {name.capitalize()}-tier picks: {r} over {tn}.")
+            tn = int(tn)
+            line = f"- {name.capitalize()}-tier picks: {r} over {tn} picks"
+            if tn < 100:
+                line += (f" (small sample: only {tn} picks, fewer than 100, so this rate is noisy and "
+                         "can move a lot; say the pick count and 'small sample' every time it is mentioned)")
+            else:
+                line += " (one window only; say the pick count every time it is mentioned)"
+            line += (". Context only: never present a tier as proof the model works, as a win, "
+                     "or as a reason to trust or follow the picks.")
+            lines.append(line)
     return "\n".join(lines) if lines else "- (no settled picks yet)"
 
 
@@ -1022,12 +1044,12 @@ def generate_track_record_script(
     scores, critique = _critique(client, model, voiceover, milestone=topic)
     revisions = 0
     while (_needs_rewrite(scores, min_score, min_hook, min_safe, min_trust, min_topic)
-           or _hard_problems(voiceover)) and revisions < max_revisions:
+           or _hard_problems(voiceover, record=True)) and revisions < max_revisions:
         print(f"  ✎ Critic: avg {scores['avg']} | hook {scores['hook']} | safe {scores['safe']} "
               f"| trust {scores.get('trust', 10.0)} | topic {scores.get('topic', 10.0)} — "
               f"rewriting ({revisions + 1}/{max_revisions})")
         print(f"    Critique: {critique}")
-        hard = _hard_problems(voiceover)
+        hard = _hard_problems(voiceover, record=True)
         rewrite_prompt = _JOURNEY_REWRITE.format(
             critique=f"{critique} MUST FIX: {hard}" if hard else critique, voiceover=voiceover)
         resp = call_gemini_with_retry(
@@ -1056,7 +1078,7 @@ def generate_track_record_script(
                                      "the model's current calls and its record",
                                      question=question)
 
-    hard = _hard_problems(voiceover)
+    hard = _hard_problems(voiceover, caption=sections["caption"], record=True)
     if hard or _needs_rewrite(scores, min_score, min_hook, min_safe, min_trust, min_topic):
         raise ScriptQualityError(scores, f"{critique} MUST FIX: {hard}" if hard else critique,
                                  voiceover, revisions)
